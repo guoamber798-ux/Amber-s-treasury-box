@@ -1,0 +1,5 @@
+{
+  "name": "Amber's treasury box",
+  "description": "A smart personal portfolio tracker that uses Gemini and Google Search to fetch real-time asset prices and exchange rates, displaying wealth in USD and CNY with beautiful visualizations.",
+  "requestFramePermissions": []
+}
