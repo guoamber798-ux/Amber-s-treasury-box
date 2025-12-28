@@ -1,34 +1,30 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Amber's Treasury Box</title>
-    
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://unpkg.com/lucide-react@latest"></script>
-    
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
-        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
-    </style>
 </head>
-<body>
+<body class="bg-slate-50">
     <div id="root"></div>
 
-    <script type="text/babel" src="./geminiService.js"></script>
-    
-    <script type="text/babel" src="./App.js"></script>
-    
-    <script>
-      // 这是一个小技巧：让图标库在 React 里生效
-      window.lucide.createIcons();
+    <script type="text/babel">
+        // 将大脑直接挂载到 window，防止 App.js 找不到它
+        window.fetchMarketData = async () => {
+            // 填入你 image_ee5241.png 里的 Worker 地址
+            const url = 'https://amber-s-treasury-box.guo-amber798.workers.dev';
+            try {
+                const res = await fetch(url, { method: 'POST', body: JSON.stringify({}) });
+                return await res.json();
+            } catch (e) {
+                return { rates: { CNY: 7.24 } };
+            }
+        };
     </script>
+
+    <script type="text/babel" src="./App.js"></script>
 </body>
 </html>
