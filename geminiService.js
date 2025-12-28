@@ -3,7 +3,7 @@ export const fetchMarketData = async (holdings: any) => {
   window.alert("🚀 探针已激活！正在连接 Netlify 后端...");
   
   try {
-    const response = await fetch('/.api/get_data', { method: 'POST' });
+    const response = await fetch('/.netlify/functions/get_data', { method: 'POST' });
     const data = await response.json();
     console.log("✅ 实时数据已送达:", data);
     return data;
