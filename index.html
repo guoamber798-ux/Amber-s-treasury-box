@@ -8,17 +8,27 @@
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/lucide-react@latest"></script>
     
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
         body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
     </style>
 </head>
 <body>
     <div id="root"></div>
+
+    <script type="text/babel" src="./geminiService.js"></script>
+    
     <script type="text/babel" src="./App.js"></script>
+    
+    <script>
+      // 这是一个小技巧：让图标库在 React 里生效
+      window.lucide.createIcons();
+    </script>
 </body>
 </html>
