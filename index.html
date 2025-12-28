@@ -16,7 +16,7 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
         body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; color: #1e293b; }
-        .glass-card { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.3); }
+        .chart-container .recharts-cartesian-grid-horizontal line { stroke: #f1f5f9; }
     </style>
 </head>
 <body>
@@ -26,9 +26,14 @@
         const { useState, useEffect, useMemo } = React;
         const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } = window.Recharts;
 
-        // --- 全局配置 ---
+        // --- 全局配置与模拟数据 ---
         const AssetCategory = { Cash: 'Cash', Stock: 'Stock', Crypto: 'Crypto', Commodity: 'Commodity' };
-        const STORAGE_KEYS = { USER: 'amber_user', HOLDINGS: 'amber_holdings', HISTORY: 'amber_history' };
+        const STORAGE_KEYS = { USER: 'amber_user_pro', HOLDINGS: 'amber_holdings_pro', HISTORY: 'amber_history_pro' };
+
+        const INITIAL_HOLDINGS = [
+            { id: '1', symbol: 'Cash', quantity: 15000, category: 'Cash', currency: 'USD', price: 1 },
+            { id: '2', symbol: 'Cash', quantity: 50000, category: 'Cash', currency: 'CNY', price: 1 }
+        ];
 
         // --- 子组件：图标 ---
         const Icon = ({ name, size = 20, className = "" }) => {
@@ -36,12 +41,12 @@
             return <i data-lucide={name} style={{ width: size, height: size }} className={className}></i>;
         };
 
-        // --- 子组件：登录页 [复刻 AuthModal] ---
+        // --- 子组件：全屏登录 [复刻 AuthModal] ---
         const AuthModal = ({ onLogin }) => {
             const [name, setName] = useState('');
             return (
                 <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
-                    <div className="bg-white p-10 rounded-[40px] w-full max-w-md shadow-2xl">
+                    <div className="bg-white p-10 rounded-[48px] w-full max-w-md shadow-2xl">
                         <div className="bg-indigo-600 w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-xl">
                             <Icon name="sparkles" size={32} className="text-white" />
                         </div>
@@ -60,23 +65,21 @@
 
         // --- 主程序 ---
         function App() {
+            // 状态管理：继承所有原始功能
             const [user, setUser] = useState(() => JSON.parse(localStorage.getItem(STORAGE_KEYS.USER)));
-            const [holdings, setHoldings] = useState(() => JSON.parse(localStorage.getItem(STORAGE_KEYS.HOLDINGS)) || [
-                { id: '1', symbol: 'Cash', quantity: 15000, category: 'Cash', currency: 'USD', price: 1 },
-                { id: '2', symbol: 'Cash', quantity: 50000, category: 'Cash', currency: 'CNY', price: 1 }
-            ]);
+            const [holdings, setHoldings] = useState(() => JSON.parse(localStorage.getItem(STORAGE_KEYS.HOLDINGS)) || INITIAL_HOLDINGS);
             const [history, setHistory] = useState(() => JSON.parse(localStorage.getItem(STORAGE_KEYS.HISTORY)) || [
                 { time: '09:00', val: 21800 }, { time: '12:00', val: 21944 }, { time: '18:00', val: 22100 }
             ]);
-            const [rates, setRates] = useState({ CNY: 7.24, HKD: 7.82 });
+            const [rates, setRates] = useState({ CNY: 7.24 });
             const [isRefreshing, setIsRefreshing] = useState(false);
 
-            // 自动持久化
+            // 自动同步到本地存储
             useEffect(() => { localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user)); }, [user]);
             useEffect(() => { localStorage.setItem(STORAGE_KEYS.HOLDINGS, JSON.stringify(holdings)); }, [holdings]);
             useEffect(() => { localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(history)); }, [history]);
 
-            // 核心计算
+            // 核心计算逻辑
             const stats = useMemo(() => {
                 let totalUSD = 0;
                 const categories = {};
@@ -88,11 +91,11 @@
                 return {
                     usd: totalUSD,
                     cny: totalUSD * rates.CNY,
-                    allocation: Object.entries(categories).map(([name, val]) => ({ name, value: val }))
+                    allocation: Object.entries(categories).map(([name, value]) => ({ name, value }))
                 };
             }, [holdings, rates]);
 
-            // 数据大脑接线
+            // 连接数据大脑：通过 Cloudflare Worker 更新
             const refresh = async () => {
                 setIsRefreshing(true);
                 try {
@@ -100,9 +103,13 @@
                     const res = await fetch(url, { method: 'POST', body: JSON.stringify({}) });
                     const data = await res.json();
                     if (data.rates) setRates(prev => ({ ...prev, ...data.rates }));
+                    // 记录财富演化点
                     setHistory(prev => [...prev, { time: new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}), val: stats.usd }].slice(-20));
                 } catch (e) { console.error(e); } finally { setIsRefreshing(false); }
             };
+
+            // 首次加载自动探针同步
+            useEffect(() => { if (user) refresh(); }, []);
 
             if (!user) return <AuthModal onLogin={(name) => setUser({ username: name })} />;
 
@@ -118,11 +125,11 @@
                             <div className="bg-green-50 text-green-600 px-4 py-2 rounded-full text-[10px] font-black border border-green-100 flex items-center gap-2">
                                 <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> {isRefreshing ? 'SYNCING...' : 'AUTO-SYNCING'}
                             </div>
-                            <button onClick={() => setUser(null)} className="p-2 text-slate-300 hover:text-red-400 transition-colors"><Icon name="log-out" /></button>
+                            <button onClick={() => { if(confirm("确定登出吗？")) setUser(null); }} className="p-2 text-slate-300 hover:text-red-400 transition-colors"><Icon name="log-out" /></button>
                         </div>
                     </div>
 
-                    {/* Top Stats */}
+                    {/* Stats [复刻 image_efa7d4.jpg] */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm relative overflow-hidden group">
                             <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Net Worth (USD)</p>
@@ -141,19 +148,19 @@
                         </div>
                     </div>
 
-                    {/* Charts [复刻 image_efa7d4.jpg] */}
+                    {/* Charts Row [复刻 image_efa7d4.jpg] */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        <div className="lg:col-span-2 bg-white p-10 rounded-[48px] border border-slate-100 shadow-sm">
+                        <div className="lg:col-span-2 bg-white p-10 rounded-[48px] border border-slate-100 shadow-sm chart-container">
                             <div className="flex justify-between items-center mb-10">
-                                <h3 className="font-black text-lg flex items-center gap-3"><Icon name="history" className="text-indigo-600"/> Wealth Evolution</h3>
-                                <button onClick={refresh} className="p-2 bg-slate-50 rounded-xl hover:rotate-180 transition-all duration-500"><Icon name="refresh-cw" size={16}/></button>
+                                <h3 className="font-black text-lg flex items-center gap-3 text-slate-800"><Icon name="history" className="text-indigo-600"/> Wealth Evolution</h3>
+                                <button onClick={refresh} className="p-2 bg-slate-50 rounded-xl hover:bg-indigo-50 transition-colors"><Icon name="refresh-cw" size={16}/></button>
                             </div>
                             <div className="h-[320px] w-full">
                                 <ResponsiveContainer>
                                     <LineChart data={history}>
-                                        <CartesianGrid strokeDasharray="0" vertical={false} stroke="#f1f5f9" />
+                                        <CartesianGrid strokeDasharray="0" vertical={false} />
                                         <XAxis dataKey="time" hide />
-                                        <YAxis hide domain={['dataMin - 100', 'dataMax + 100']} />
+                                        <YAxis hide domain={['dataMin - 500', 'dataMax + 500']} />
                                         <Tooltip contentStyle={{borderRadius:'20px', border:'none', boxShadow:'0 10px 25px rgba(0,0,0,0.05)'}} />
                                         <Line type="monotone" dataKey="val" stroke="#6366f1" strokeWidth={6} dot={false} />
                                     </LineChart>
@@ -161,7 +168,7 @@
                             </div>
                         </div>
                         <div className="bg-white p-10 rounded-[48px] border border-slate-100 shadow-sm flex flex-col items-center">
-                            <h3 className="font-black text-lg mb-10 self-start flex items-center gap-3"><Icon name="pie-chart" className="text-indigo-600"/> Allocation</h3>
+                            <h3 className="font-black text-lg mb-10 self-start flex items-center gap-3 text-slate-800"><Icon name="pie-chart" className="text-indigo-600"/> Allocation</h3>
                             <div className="h-[280px] w-full relative">
                                 <ResponsiveContainer>
                                     <PieChart>
@@ -185,7 +192,6 @@
                         <div className="p-10 border-b border-slate-50 flex justify-between items-center bg-slate-50/20">
                             <h3 className="font-black text-slate-900 text-xl flex items-center gap-3">Portfolio Assets</h3>
                             <div className="flex gap-4">
-                                <button onClick={refresh} className="bg-white border px-6 py-4 rounded-2xl text-xs font-black shadow-sm flex items-center gap-2 hover:bg-slate-50 transition-all"><Icon name="refresh-cw" size={14}/> Sync Markets</button>
                                 <button className="bg-slate-900 text-white px-8 py-4 rounded-2xl text-xs font-black shadow-2xl shadow-slate-200 flex items-center gap-2 hover:bg-slate-800 transition-all"><Icon name="plus" size={14}/> Add Asset</button>
                             </div>
                         </div>
@@ -209,15 +215,10 @@
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="px-12 py-10 text-right">
-                                            <p className="font-black text-slate-800 text-2xl">${Math.floor(h.quantity / (h.currency === 'CNY' ? rates.CNY : 1)).toLocaleString()}</p>
+                                        <td className="px-12 py-10 text-right font-black text-slate-800 text-2xl">
+                                            ${Math.floor(h.quantity / (h.currency === 'CNY' ? rates.CNY : 1)).toLocaleString()}
                                         </td>
-                                        <td className="px-12 py-10 text-right font-black text-indigo-600 text-lg">
-                                            <div className="flex items-center justify-end gap-2">
-                                                <span>1.00</span>
-                                                <div className="bg-indigo-50 p-1.5 rounded-lg"><Icon name="trending-up" size={14}/></div>
-                                            </div>
-                                        </td>
+                                        <td className="px-12 py-10 text-right font-black text-indigo-600 text-lg">1.00</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -227,7 +228,7 @@
             );
         }
 
-        // React 17 渲染启动
+        // 使用 React 17 渲染启动
         ReactDOM.render(<App />, document.getElementById('root'));
     </script>
 </body>
