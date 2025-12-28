@@ -1,51 +1,42 @@
-const fetch = require('node-fetch');
+const https = require('https');
 
 exports.handler = async function(event, context) {
   const GEMINI_KEY = process.env.GEMINI_API_KEY;
   const POLYGON_KEY = process.env.POLYGON_API_KEY;
 
-  // --- 方案 A：主力线路 (Gemini 2.0 Flash) ---
+  // 这是一个帮我们处理网络请求的小助手
+  const makeRequest = (url, method = 'GET', postData = null) => {
+    return new Promise((resolve, reject) => {
+      const options = { method };
+      const req = https.request(url, options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => data += chunk);
+        res.on('end', () => resolve({ ok: res.statusCode < 300, data: JSON.parse(data) }));
+      });
+      req.on('error', (e) => reject(e));
+      if (postData) req.write(JSON.stringify(postData));
+      req.end();
+    });
+  };
+
   try {
-    // 明确指定使用 gemini-2.0-flash 模型
+    // 方案 A: 尝试 Gemini 2.0 Flash
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
-    
-    const response = await fetch(geminiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ 
-          parts: [{ text: "以JSON格式提供最新的AAPL股票价格数据。返回格式必须包含：price, change_percent。" }] 
-        }]
-      })
+    const geminiRes = await makeRequest(geminiUrl, 'POST', {
+      contents: [{ parts: [{ text: "Return AAPL price in JSON format." }] }]
     });
 
-    if (response.ok) {
-      const result = await response.json();
-      return { 
-        statusCode: 200, 
-        body: JSON.stringify({ source: 'Gemini-2.0-Flash', data: result }) 
-      };
-    }
-    throw new Error('Gemini 额度超限或不可用');
-  } 
+    if (geminiRes.ok) return { statusCode: 200, body: JSON.stringify({ source: 'Gemini', ...geminiRes.data }) };
+    throw new Error('Gemini failed');
 
-  // --- 方案 B：自动切换备选 (Polygon.io) ---
-  catch (error) {
-    console.warn("Gemini 无法工作，切换至 Polygon 备选方案:", error.message);
+  } catch (error) {
+    // 方案 B: 备选 Polygon
     try {
       const polyUrl = `https://api.polygon.io/v2/aggs/ticker/AAPL/prev?adjusted=true&apiKey=${POLYGON_KEY}`;
-      const polyResponse = await fetch(polyUrl);
-      const polyData = await polyResponse.json();
-      
-      return { 
-        statusCode: 200, 
-        body: JSON.stringify({ source: 'Polygon-Backup', data: polyData }) 
-      };
-    } catch (polyError) {
-      return { 
-        statusCode: 500, 
-        body: JSON.stringify({ error: "双线路均已失效" }) 
-      };
+      const polyRes = await makeRequest(polyUrl);
+      return { statusCode: 200, body: JSON.stringify({ source: 'Polygon', ...polyRes.data }) };
+    } catch (e) {
+      return { statusCode: 500, body: "Both services failed" };
     }
   }
 };
