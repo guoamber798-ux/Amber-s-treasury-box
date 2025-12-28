@@ -1,41 +1,14 @@
-import { Holding } from "../types";
-
-export const fetchMarketData = async (holdings: Holding[]) => {
-  console.log("🚀 探针启动：正在向后端请求资产行情...");
-
+export const fetchMarketData = async (holdings: any) => {
+  // 直接弹窗，确认识别到代码更新
+  window.alert("🚀 探针已激活！正在连接 Netlify 后端...");
+  
   try {
-    // 关键：这里直接请求你已经通了的那个后端地址
-    const response = await fetch('/.netlify/functions/get_data', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        holdingsString: holdings.map(h => `${h.symbol} (${h.currency})`).join(", ") 
-      })
-    });
-
-    if (!response.ok) {
-        console.error("❌ 后端响应错误，状态码:", response.status);
-        return { rates: { CNY: 7.24, HKD: 7.82 }, prices: {} };
-    }
-
+    const response = await fetch('/.netlify/functions/get_data', { method: 'POST' });
     const data = await response.json();
-    console.log("✅ 拿到实时数据啦:", data);
-
-    // 映射逻辑：把后端返回的格式转换成 UI 需要的格式
-    const finalPriceMap: Record<string, number> = {};
-    if (data.prices && Array.isArray(data.prices)) {
-      data.prices.forEach((p: any) => {
-        const simpleSymbol = p.symbol.split(' ')[0]; // 把 "AAPL (USD)" 变回 "AAPL"
-        finalPriceMap[simpleSymbol] = p.price;
-      });
-    }
-
-    return {
-      rates: data.rates || { CNY: 7.24, HKD: 7.82 },
-      prices: finalPriceMap
-    };
-  } catch (error) {
-    console.error("❌ 前端连接失败:", error);
+    console.log("✅ 实时数据已送达:", data);
+    return data;
+  } catch (e) {
+    console.error("❌ 获取失败:", e);
     return { rates: { CNY: 7.24, HKD: 7.82 }, prices: {} };
   }
 };
