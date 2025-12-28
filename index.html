@@ -3,16 +3,15 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Amber Treasury | Pro Max Final</title>
+    <title>Amber Treasury | Final Stable</title>
     
-    <script src="https://lf6-cdn-tos.bytecdntp.com/cdn/expire-1-M/react/17.0.2/umd/react.production.min.js"></script>
-    <script src="https://lf6-cdn-tos.bytecdntp.com/cdn/expire-1-M/react-dom/17.0.2/umd/react-dom.production.min.js"></script>
-    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/16.14.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/16.14.0/umd/react-dom.production.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.1.16/Recharts.js"></script>
     
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://lf6-cdn-tos.bytecdntp.com/cdn/expire-1-M/babel-standalone/7.17.6/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/6.26.0/babel.min.js"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
@@ -27,7 +26,6 @@
         const { useState, useEffect, useMemo } = React;
         const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } = window.Recharts;
 
-        // 图标组件
         const Icon = ({ name, size = 20 }) => {
             useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name]);
             return <i data-lucide={name} style={{ width: size, height: size }}></i>;
@@ -35,22 +33,22 @@
 
         function App() {
             const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('amber_user')));
+            const [rates, setRates] = useState({ CNY: 7.24 });
             const [holdings] = useState([
                 { id: '1', symbol: 'Cash', quantity: 15000, category: 'Cash', currency: 'USD' },
                 { id: '2', symbol: 'Cash', quantity: 50000, category: 'Cash', currency: 'CNY' }
             ]);
-            const [rates, setRates] = useState({ CNY: 7.24 });
             const history = [
                 { time: '09:00', val: 21800 }, { time: '12:00', val: 21944 }, { time: '18:00', val: 22100 }
             ];
 
-            // 首次加载自动刷新汇率
             useEffect(() => {
                 if (user) {
+                    localStorage.setItem('amber_user', JSON.stringify(user));
                     fetch('https://amber-s-treasury-box.guo-amber798.workers.dev', { method: 'POST', body: JSON.stringify({}) })
-                    .then(res => res.json())
-                    .then(data => data.rates && setRates(data.rates))
-                    .catch(e => console.log("Worker offline"));
+                        .then(res => res.json())
+                        .then(data => data.rates && setRates(data.rates))
+                        .catch(e => console.log("Sync delay"));
                 }
             }, [user]);
 
@@ -66,7 +64,7 @@
                                 onClick={() => setUser({name: 'Amber'})}
                                 className="w-full p-5 bg-indigo-600 text-white font-black rounded-2xl hover:bg-indigo-700 transition-all uppercase tracking-widest text-xs"
                             >
-                                进入资产仪表盘
+                                进入仪表盘
                             </button>
                         </div>
                     </div>
@@ -111,12 +109,12 @@
                             <h3 className="font-black text-lg mb-10 flex items-center gap-3"><Icon name="history" className="text-indigo-600"/> Wealth Evolution</h3>
                             <div className="h-[320px] w-full">
                                 <ResponsiveContainer>
+                                    {/* 核心修复：isAnimationActive={false} 彻底停用出问题的动画零件 */}
                                     <LineChart data={history}>
                                         <CartesianGrid strokeDasharray="0" vertical={false} stroke="#f1f5f9" />
                                         <XAxis dataKey="time" hide />
                                         <YAxis hide domain={['dataMin - 100', 'dataMax + 100']} />
-                                        <Tooltip contentStyle={{borderRadius:'20px', border:'none'}} />
-                                        {/* 关键修复：关闭动画以解决 Animate.js 报错 */}
+                                        <Tooltip contentStyle={{borderRadius:'20px', border:'none', boxShadow:'0 10px 25px rgba(0,0,0,0.05)'}} />
                                         <Line type="monotone" dataKey="val" stroke="#6366f1" strokeWidth={6} dot={false} isAnimationActive={false} />
                                     </LineChart>
                                 </ResponsiveContainer>
@@ -157,7 +155,7 @@
                             <thead className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                                 <tr>
                                     <th className="px-12 py-8">Asset Details</th>
-                                    <th className="px-12 py-8 text-right">Value (USD)</th>
+                                    <th className="px-12 py-8 text-right">Market Value (USD)</th>
                                     <th className="px-12 py-8 text-right">Price Action</th>
                                 </tr>
                             </thead>
@@ -176,7 +174,7 @@
                                         <td className="px-12 py-10 text-right font-black text-slate-800 text-2xl">
                                             ${Math.floor(h.quantity / (h.currency === 'CNY' ? rates.CNY : 1)).toLocaleString()}
                                         </td>
-                                        <td className="px-12 py-10 text-right font-black text-indigo-600 text-lg">1.00</td>
+                                        <td className="px-12 py-10 text-right font-black text-indigo-600 text-lg tracking-tight">1.00</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -186,7 +184,7 @@
             );
         }
 
-        // 最终渲染启动
+        // 启动渲染
         ReactDOM.render(<App />, document.getElementById('root'));
     </script>
 </body>
