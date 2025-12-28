@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Amber Treasury | Ultimate Pro 2.0</title>
+    <title>Amber Treasury | Ultimate Pro 2.5</title>
     <script src="https://cdn.staticfile.org/react/16.14.0/umd/react.production.min.js"></script>
     <script src="https://cdn.staticfile.org/react-dom/16.14.0/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.staticfile.org/lucide/0.263.0/lucide.min.js"></script>
@@ -38,17 +38,25 @@
             'Collectible': { color: '#ec4899', label: '收藏品' }
         };
 
-        // --- 子组件：财富增长曲线 (原生 SVG) ---
+        // --- 子组件：财富历史曲线 ---
         const WealthChart = ({ data }) => {
-            if (!data || data.length < 2) return <div className="h-full flex items-center justify-center text-slate-300 text-xs font-bold uppercase tracking-widest">需要更多同步点位...</div>;
-            const maxVal = Math.max(...data.map(d => d.val)) * 1.1;
-            const minVal = Math.min(...data.map(d => d.val)) * 0.9;
+            if (!data || data.length < 2) return <div className="h-full flex items-center justify-center text-slate-300 text-xs font-bold uppercase tracking-widest">需要更多同步点位以开启财富轨迹...</div>;
+            const vals = data.map(d => d.val);
+            const maxVal = Math.max(...vals) * 1.05;
+            const minVal = Math.min(...vals) * 0.95;
             const range = maxVal - minVal;
             const points = data.map((d, i) => `${(i / (data.length - 1)) * 1000},${250 - ((d.val - minVal) / range) * 200}`).join(' ');
 
             return (
                 <div className="w-full h-[250px] relative mt-4">
                     <svg viewBox="0 0 1000 250" className="w-full h-full overflow-visible">
+                        <defs>
+                            <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#6366f1" stopOpacity="0.2" />
+                                <stop offset="100%" stopColor="#6366f1" stopOpacity="0" />
+                            </linearGradient>
+                        </defs>
+                        <path d={`M ${points} V 250 H 0 Z`} fill="url(#lineGrad)" />
                         <path d={`M ${points}`} fill="none" stroke="#6366f1" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                 </div>
@@ -70,11 +78,11 @@
                             const endY = Math.sin(2 * Math.PI * cumulative);
                             return <path key={i} d={`M ${startX} ${startY} A 1 1 0 ${s.percent > 0.5 ? 1 : 0} 1 ${endX} ${endY} L 0 0`} fill={s.color} />;
                         })}
-                        <circle cx="0" cy="0" r="0.75" fill="white" />
+                        <circle cx="0" cy="0" r="0.78" fill="white" />
                     </svg>
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Portfolio</p>
-                        <p className="text-xl font-black text-slate-900 tracking-tighter">Assets</p>
+                        <p className="text-xl font-black text-slate-900 tracking-tighter uppercase">Assets</p>
                     </div>
                 </div>
             );
@@ -85,11 +93,15 @@
             const [holdings, setHoldings] = useState(() => JSON.parse(localStorage.getItem('amber_holdings_v2')) || []);
             const [watchlist, setWatchlist] = useState(() => JSON.parse(localStorage.getItem('amber_watchlist_v2')) || []);
             const [history, setHistory] = useState(() => JSON.parse(localStorage.getItem('amber_history_v2')) || []);
-            const [rates, setRates] = useState({ CNY: 7.24 });
+            
+            const [rates, setRates] = useState({ USD: 1, CNY: 7.24, HKD: 7.82 });
+            const [prices, setPrices] = useState({}); // 核心：存储市场价格
+            
             const [isSyncing, setIsSyncing] = useState(false);
             const [modal, setModal] = useState({ open: false, type: 'portfolio' });
-            const [form, setForm] = useState({ symbol: '', quantity: '', category: 'Cash', currency: 'USD' });
+            const [form, setForm] = useState({ symbol: '', quantity: '', category: 'Stock', currency: 'USD' });
 
+            // 持久化
             useEffect(() => {
                 if (user) {
                     localStorage.setItem('amber_user_v2', JSON.stringify(user));
@@ -99,95 +111,122 @@
                 }
             }, [user, holdings, watchlist, history]);
 
+            // --- 核心刷新函数：连接 Worker 获取真实价格 ---
+            const sync = async (currentHoldings = holdings, currentWatchlist = watchlist) => {
+                setIsSyncing(true);
+                console.log("🚀 [探针] 正在获取最新市场行情...");
+                try {
+                    const allAssets = [...currentHoldings, ...currentWatchlist];
+                    const res = await fetch('https://amber-s-treasury-box.guo-amber798.workers.dev', { 
+                        method: 'POST', 
+                        body: JSON.stringify({ holdings: allAssets }) 
+                    });
+                    const data = await res.json();
+                    
+                    if (data.rates) setRates(prev => ({ ...prev, ...data.rates }));
+                    if (data.prices) setPrices(prev => ({ ...prev, ...data.prices }));
+
+                    // 计算当前总价值并存入历史记录
+                    let currentTotalUSD = 0;
+                    currentHoldings.forEach(h => {
+                        const price = h.category === 'Cash' ? 1 : (data.prices?.[h.symbol] || prices[h.symbol] || 0);
+                        const rate = (data.rates?.[h.currency] || rates[h.currency] || 1);
+                        currentTotalUSD += (h.quantity * price) / (h.currency === 'USD' ? 1 : rate);
+                    });
+                    
+                    if (currentTotalUSD > 0) {
+                        setHistory(prev => [...prev, { time: new Date().toLocaleTimeString(), val: currentTotalUSD }].slice(-50));
+                    }
+                } catch (e) {
+                    console.error("❌ 同步失败:", e);
+                } finally {
+                    setTimeout(() => setIsSyncing(false), 800);
+                }
+            };
+
+            useEffect(() => { if (user) sync(); }, [user]);
+
+            // 计算属性
             const stats = useMemo(() => {
                 let totalUSD = 0;
                 const catTotals = {};
                 holdings.forEach(h => {
-                    const val = h.currency === 'CNY' ? h.quantity / rates.CNY : h.quantity;
-                    totalUSD += val;
-                    catTotals[h.category] = (catTotals[h.category] || 0) + val;
+                    const price = h.category === 'Cash' ? 1 : (prices[h.symbol] || 0);
+                    const rate = h.currency === 'USD' ? 1 : (rates[h.currency] || 7.24);
+                    const val = (h.quantity * price) / (h.currency === 'CNY' && rates.CNY ? rates.CNY : (h.currency === 'USD' ? 1 : rate));
+                    
+                    // 修正汇率逻辑：如果货币是 CNY，且有 rates.CNY，则 val = quantity * price / rates.CNY
+                    const finalVal = h.currency === 'CNY' ? (h.quantity * price) / rates.CNY : (h.quantity * price);
+                    
+                    totalUSD += finalVal;
+                    catTotals[h.category] = (catTotals[h.category] || 0) + finalVal;
                 });
                 return {
                     usd: totalUSD,
                     pie: Object.keys(CATEGORIES).map(c => ({ name: c, color: CATEGORIES[c].color, percent: totalUSD > 0 ? (catTotals[c] || 0) / totalUSD : 0 }))
                 };
-            }, [holdings, rates]);
-
-            const sync = async () => {
-                setIsSyncing(true);
-                try {
-                    const res = await fetch('https://amber-s-treasury-box.guo-amber798.workers.dev', { method: 'POST', body: JSON.stringify({}) });
-                    const data = await res.json();
-                    if (data.rates) setRates(data.rates);
-                    setHistory(prev => [...prev, { time: new Date().toLocaleTimeString(), val: stats.usd }].slice(-20));
-                } catch (e) { console.log("Sync delay"); }
-                finally { setIsSyncing(false); }
-            };
+            }, [holdings, rates, prices]);
 
             const addAsset = () => {
                 const item = { ...form, id: Date.now(), quantity: parseFloat(form.quantity) };
                 if (modal.type === 'portfolio') setHoldings([...holdings, item]);
                 else setWatchlist([...watchlist, item]);
                 setModal({ open: false });
-                setForm({ symbol: '', quantity: '', category: 'Cash', currency: 'USD' });
-            };
-
-            const removeAsset = (type, id) => {
-                if (type === 'portfolio') setHoldings(holdings.filter(h => h.id !== id));
-                else setWatchlist(watchlist.filter(w => w.id !== id));
+                sync([...holdings, item], watchlist); // 添加后立即触发同步获取价格
+                setForm({ symbol: '', quantity: '', category: 'Stock', currency: 'USD' });
             };
 
             if (!user) return (
-                <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
-                    <div className="bg-white p-12 rounded-[48px] w-full max-w-sm shadow-2xl text-center">
+                <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 text-center">
+                    <div className="bg-white p-12 rounded-[48px] w-full max-w-sm shadow-2xl">
                         <div className="bg-indigo-600 w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-xl shadow-indigo-100"><Icon name="sparkles" size={32} className="text-white" /></div>
                         <h1 className="text-3xl font-black mb-10 tracking-tight uppercase">Amber Treasury</h1>
-                        <button onClick={() => {setUser({name:'Amber'}); sync();}} className="w-full p-5 bg-indigo-600 text-white font-black rounded-2xl uppercase tracking-widest text-xs shadow-lg shadow-indigo-100">Access Dashboard</button>
+                        <button onClick={() => setUser({name:'Amber'})} className="w-full p-5 bg-indigo-600 text-white font-black rounded-2xl uppercase tracking-widest text-xs">Access Dashboard</button>
                     </div>
                 </div>
             );
 
             return (
-                <div className="min-h-screen p-4 md:p-10 max-w-[1400px] mx-auto space-y-8 animate-in fade-in duration-700">
-                    {/* Header */}
+                <div className="min-h-screen p-4 md:p-10 max-w-[1400px] mx-auto space-y-8 animate-in fade-in duration-1000">
+                    {/* Header [复刻 image_efa7d4.jpg] */}
                     <div className="flex justify-between items-center">
                         <div className="flex items-center gap-3">
                             <div className="bg-indigo-600 p-2.5 rounded-2xl text-white shadow-lg"><Icon name="sparkles" /></div>
                             <h1 className="text-2xl font-black tracking-tight uppercase">Amber Treasury</h1>
                         </div>
-                        <button onClick={sync} disabled={isSyncing} className="flex items-center gap-3 px-6 py-3 bg-white rounded-2xl font-black text-[10px] tracking-widest uppercase border border-indigo-50 shadow-sm hover:border-indigo-100 transition-all">
+                        <button onClick={() => sync()} disabled={isSyncing} className="flex items-center gap-3 px-6 py-3 bg-white rounded-2xl font-black text-[10px] tracking-widest uppercase border border-indigo-50 shadow-sm hover:border-indigo-100 transition-all">
                             <Icon name="refresh-cw" size={14} className={isSyncing ? "rotate-sync" : ""} />
-                            {isSyncing ? "Syncing..." : `Sync Now (1:${rates.CNY})`}
+                            {isSyncing ? "Syncing Market..." : `Sync Now (1:${rates.CNY})`}
                         </button>
                     </div>
 
-                    {/* Stats */}
+                    {/* Dashboard Cards */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="amber-card p-8 relative overflow-hidden group hover:border-indigo-100 transition-all">
+                        <div className="amber-card p-8 relative overflow-hidden group">
                             <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest leading-none">Net Worth (USD)</p>
                             <h2 className="text-4xl font-black text-slate-900 tracking-tighter">${Math.floor(stats.usd).toLocaleString()}</h2>
                             <div className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-indigo-50 text-indigo-600 rounded-[24px]"><Icon name="dollar-sign" size={28}/></div>
                         </div>
-                        <div className="amber-card p-8 relative overflow-hidden group hover:border-indigo-100 transition-all">
+                        <div className="amber-card p-8 relative overflow-hidden group">
                             <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest leading-none">Net Worth (CNY)</p>
                             <h2 className="text-4xl font-black text-slate-900 tracking-tighter">¥{Math.floor(stats.usd * rates.CNY).toLocaleString()}</h2>
                             <div className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-blue-50 text-blue-600 rounded-[24px]"><Icon name="wallet" size={28}/></div>
                         </div>
-                        <div className="amber-card p-8 relative overflow-hidden group hover:border-indigo-100 transition-all">
-                            <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest leading-none">Health Check</p>
-                            <h2 className="text-4xl font-black text-green-500 tracking-tighter uppercase">Stable</h2>
+                        <div className="amber-card p-8 relative overflow-hidden group">
+                            <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest leading-none">Active Assets</p>
+                            <h2 className="text-4xl font-black text-green-500 tracking-tighter uppercase">{holdings.length} Positions</h2>
                             <div className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-green-50 text-green-600 rounded-[24px]"><Icon name="trending-up" size={28}/></div>
                         </div>
                     </div>
 
-                    {/* Main Charts */}
+                    {/* Charts */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         <div className="lg:col-span-2 amber-card p-10">
-                            <h3 className="font-black text-lg mb-6 flex items-center gap-3"><Icon name="history" className="text-indigo-600"/> Wealth Evolution</h3>
+                            <h3 className="font-black text-lg mb-6 flex items-center gap-3 text-slate-800"><Icon name="history" className="text-indigo-600"/> Wealth Evolution</h3>
                             <WealthChart data={history} />
                         </div>
                         <div className="lg:col-span-1 amber-card p-10">
-                            <h3 className="font-black text-lg mb-10 flex items-center gap-3"><Icon name="pie-chart" className="text-indigo-600"/> Allocation</h3>
+                            <h3 className="font-black text-lg mb-10 flex items-center gap-3 text-slate-800"><Icon name="pie-chart" className="text-indigo-600"/> Allocation</h3>
                             <AllocationPie data={stats.pie} />
                         </div>
                     </div>
@@ -202,17 +241,25 @@
                             </div>
                             <table className="w-full text-left">
                                 <thead className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">
-                                    <tr><th className="px-12 py-6">Asset</th><th className="px-12 py-6 text-right">Value (USD)</th><th className="px-12 py-6 text-right">Action</th></tr>
+                                    <tr><th className="px-12 py-6 text-slate-400">Asset</th><th className="px-12 py-6 text-right text-slate-400">Value (USD)</th><th className="px-12 py-6 text-right text-slate-400">Price</th><th className="px-12 py-6 text-right text-slate-400">Action</th></tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-50">
                                     {holdings.map(h => (
                                         <tr key={h.id} className="hover:bg-slate-50/30 transition-colors">
                                             <td className="px-12 py-8 flex items-center gap-5">
-                                                <div className="w-10 h-10 rounded-xl flex items-center justify-center font-black text-white text-xs" style={{backgroundColor: CATEGORIES[h.category].color}}>{h.symbol[0]}</div>
-                                                <div><p className="font-black text-slate-900 text-lg tracking-tight leading-none">{h.symbol} <span className="text-[10px] bg-slate-100 px-2 py-1 rounded-lg text-slate-500 ml-1 uppercase font-black">{h.currency}</span></p><p className="text-[10px] text-slate-400 font-bold uppercase mt-1 tracking-widest">{CATEGORIES[h.category].label}</p></div>
+                                                <div className="w-10 h-10 rounded-xl flex items-center justify-center font-black text-white text-xs" style={{backgroundColor: CATEGORIES[h.category]?.color || '#cbd5e1'}}>{h.symbol[0]}</div>
+                                                <div>
+                                                    <p className="font-black text-slate-900 text-lg tracking-tight leading-none">{h.symbol} <span className="text-[10px] bg-slate-100 px-2 py-1 rounded-lg text-slate-500 ml-1 uppercase font-black">{h.currency}</span></p>
+                                                    <p className="text-[10px] text-slate-400 font-bold uppercase mt-1 tracking-widest">{CATEGORIES[h.category]?.label || '其他'}</p>
+                                                </div>
                                             </td>
-                                            <td className="px-12 py-8 text-right text-xl font-black text-slate-800">${Math.floor(h.currency === 'CNY' ? h.quantity / rates.CNY : h.quantity).toLocaleString()}</td>
-                                            <td className="px-12 py-8 text-right"><button onClick={() => removeAsset('portfolio', h.id)} className="text-slate-300 hover:text-red-500 transition-colors"><Icon name="trash-2" size={16} /></button></td>
+                                            <td className="px-12 py-8 text-right text-xl font-black text-slate-800">
+                                                ${Math.floor(h.currency === 'CNY' ? (h.quantity * (prices[h.symbol] || 0) / rates.CNY) : (h.quantity * (h.category === 'Cash' ? 1 : (prices[h.symbol] || 0)))).toLocaleString()}
+                                            </td>
+                                            <td className="px-12 py-8 text-right font-black text-indigo-600 text-lg">
+                                                {h.category === 'Cash' ? '1.00' : (prices[h.symbol] ? prices[h.symbol].toLocaleString() : '---')}
+                                            </td>
+                                            <td className="px-12 py-8 text-right"><button onClick={() => setHoldings(holdings.filter(x => x.id !== h.id))} className="text-slate-300 hover:text-red-500 transition-colors"><Icon name="trash-2" size={16} /></button></td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -220,24 +267,26 @@
                         </div>
 
                         {/* Watchlist */}
-                        <div className="amber-card overflow-hidden">
-                            <div className="p-10 border-b border-slate-50 flex justify-between items-center bg-slate-50/20">
-                                <h3 className="font-black text-slate-900 text-xl tracking-tighter">Market Watchlist</h3>
-                                <button onClick={() => setModal({open:true, type:'watchlist'})} className="bg-indigo-600 text-white px-8 py-4 rounded-2xl text-xs font-black shadow-xl hover:scale-105 transition-all">Add Watch</button>
+                        <div className="amber-card overflow-hidden shadow-2xl shadow-indigo-50/50">
+                            <div className="p-10 border-b border-slate-50 flex justify-between items-center bg-indigo-50/10">
+                                <h3 className="font-black text-indigo-900 text-xl tracking-tighter">Market Watchlist</h3>
+                                <button onClick={() => setModal({open:true, type:'watchlist'})} className="bg-indigo-600 text-white px-8 py-4 rounded-2xl text-xs font-black shadow-xl hover:bg-indigo-700">Add Watch</button>
                             </div>
                             <table className="w-full text-left">
                                 <thead className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">
-                                    <tr><th className="px-12 py-6">Target</th><th className="px-12 py-6 text-right">Alert Qty</th><th className="px-12 py-8 text-right">Action</th></tr>
+                                    <tr><th className="px-12 py-6 text-slate-400">Target</th><th className="px-12 py-6 text-right text-slate-400">Market Price</th><th className="px-12 py-6 text-right text-slate-400">Action</th></tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-50">
                                     {watchlist.map(w => (
-                                        <tr key={w.id} className="hover:bg-slate-50/30 transition-colors">
-                                            <td className="px-12 py-8 flex items-center gap-5">
+                                        <tr key={w.id} className="hover:bg-indigo-50/30 transition-colors">
+                                            <td className="px-12 py-8 flex items-center gap-5 font-black text-slate-900 text-lg">
                                                 <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center font-black text-slate-400 text-xs uppercase">{w.symbol[0]}</div>
-                                                <p className="font-black text-slate-900 text-lg tracking-tight">{w.symbol} <span className="text-[10px] font-black text-slate-400 uppercase ml-2">{CATEGORIES[w.category].label}</span></p>
+                                                {w.symbol}
                                             </td>
-                                            <td className="px-12 py-8 text-right font-bold text-slate-400">{w.quantity.toLocaleString()} {w.currency}</td>
-                                            <td className="px-12 py-8 text-right"><button onClick={() => removeAsset('watchlist', w.id)} className="text-slate-300 hover:text-red-500 transition-colors"><Icon name="trash-2" size={16} /></button></td>
+                                            <td className="px-12 py-8 text-right font-black text-indigo-600 text-xl">
+                                                ${prices[w.symbol] ? prices[w.symbol].toLocaleString() : 'Waiting Sync...'}
+                                            </td>
+                                            <td className="px-12 py-8 text-right"><button onClick={() => setWatchlist(watchlist.filter(x => x.id !== w.id))} className="text-slate-300 hover:text-red-500 transition-colors"><Icon name="trash-2" size={16} /></button></td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -245,22 +294,22 @@
                         </div>
                     </div>
 
-                    {/* Add Modal */}
+                    {/* Modal */}
                     {modal.open && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 modal-bg animate-in fade-in duration-200">
                             <div className="bg-white p-10 rounded-[48px] w-full max-w-md shadow-2xl">
-                                <h3 className="text-2xl font-black mb-8 tracking-tighter text-slate-900 uppercase">Add to {modal.type}</h3>
+                                <div className="flex justify-between items-center mb-8">
+                                    <h3 className="text-2xl font-black tracking-tighter text-slate-900 uppercase">Add to {modal.type}</h3>
+                                    <button onClick={() => setModal({open:false})} className="text-slate-300 hover:text-slate-900"><Icon name="x" size={24} /></button>
+                                </div>
                                 <div className="space-y-4 font-bold text-slate-700">
-                                    <div className="space-y-1"><p className="text-[10px] font-black text-slate-400 uppercase ml-2">Symbol</p><input placeholder="e.g. BTC / Gold / AAPL" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none" value={form.symbol} onChange={e => setForm({...form, symbol: e.target.value})} /></div>
-                                    <div className="space-y-1"><p className="text-[10px] font-black text-slate-400 uppercase ml-2">Quantity</p><input type="number" placeholder="0.00" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none" value={form.quantity} onChange={e => setForm({...form, quantity: e.target.value})} /></div>
+                                    <div className="space-y-1"><p className="text-[10px] font-black text-slate-400 uppercase ml-2">Symbol / Name</p><input placeholder="e.g. BTC, NVDA, Gold" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none" value={form.symbol} onChange={e => setForm({...form, symbol: e.target.value.toUpperCase()})} /></div>
+                                    <div className="space-y-1"><p className="text-[10px] font-black text-slate-400 uppercase ml-2">Quantity Owned</p><input type="number" placeholder="0" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none" value={form.quantity} onChange={e => setForm({...form, quantity: e.target.value})} /></div>
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-1"><p className="text-[10px] font-black text-slate-400 uppercase ml-2">Currency</p><select className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl" value={form.currency} onChange={e => setForm({...form, currency: e.target.value})}><option value="USD">USD</option><option value="CNY">CNY</option></select></div>
-                                        <div className="space-y-1"><p className="text-[10px] font-black text-slate-400 uppercase ml-2">Category</p><select className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl" value={form.category} onChange={e => setForm({...form, category: e.target.value})}>{Object.keys(CATEGORIES).map(c => <option key={c} value={c}>{CATEGORIES[c].label}</option>)}</select></div>
+                                        <div className="space-y-1"><p className="text-[10px] font-black text-slate-400 uppercase ml-2">Currency</p><select className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-black" value={form.currency} onChange={e => setForm({...form, currency: e.target.value})}><option value="USD">USD ($)</option><option value="CNY">CNY (¥)</option></select></div>
+                                        <div className="space-y-1"><p className="text-[10px] font-black text-slate-400 uppercase ml-2">Category</p><select className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-black" value={form.category} onChange={e => setForm({...form, category: e.target.value})}>{Object.keys(CATEGORIES).map(c => <option key={c} value={c}>{CATEGORIES[c].label}</option>)}</select></div>
                                     </div>
-                                    <div className="flex gap-4 mt-8 pt-4 border-t border-slate-50">
-                                        <button onClick={() => setModal({open:false})} className="flex-1 p-4 bg-slate-50 text-slate-400 font-black rounded-2xl uppercase tracking-widest text-[10px]">Cancel</button>
-                                        <button onClick={addAsset} className="flex-1 p-4 bg-indigo-600 text-white font-black rounded-2xl uppercase tracking-widest text-[10px] shadow-lg shadow-indigo-100">Save Asset</button>
-                                    </div>
+                                    <button onClick={addAsset} className="w-full mt-8 p-5 bg-indigo-600 text-white font-black rounded-2xl uppercase tracking-widest text-xs shadow-xl shadow-indigo-100 hover:scale-[1.02] transition-transform">Add Item</button>
                                 </div>
                             </div>
                         </div>
