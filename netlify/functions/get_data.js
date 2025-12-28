@@ -4,38 +4,33 @@ exports.handler = async function(event, context) {
   const GEMINI_KEY = process.env.GEMINI_API_KEY;
   const POLYGON_KEY = process.env.POLYGON_API_KEY;
 
-  // 接收前端传来的资产列表
-  const { holdingsString } = JSON.parse(event.body || '{}');
+  try {
+    const payload = JSON.stringify({
+      contents: [{ parts: [{ text: "以JSON格式返回AAPL现在的价格，包含字段：price, change。" }] }]
+    });
 
-  const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
+    return new Promise((resolve) => {
+      const options = {
+        hostname: 'generativelanguage.googleapis.com',
+        path: `/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      };
 
-  const callGemini = () => {
-    return new Promise((resolve, reject) => {
-      const payload = JSON.stringify({
-        contents: [{ parts: [{ text: `Get prices for: [${holdingsString}]. Return valid JSON: {"rates":{"CNY":number,"HKD":number},"prices":[{"symbol":"string","price":number}]}` }] }]
-      });
-
-      const req = https.request(geminiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' } }, (res) => {
+      const req = https.request(options, (res) => {
         let body = '';
-        res.on('data', (chunk) => body += chunk);
-        res.on('end', () => resolve({ ok: res.statusCode === 200, data: JSON.parse(body) }));
+        res.on('data', (d) => body += d);
+        res.on('end', () => {
+          const data = JSON.parse(body);
+          const aiText = data.candidates[0].content.parts[0].text.replace(/```json/g, "").replace(/```/g, "").trim();
+          resolve({ statusCode: 200, headers: { "Content-Type": "application/json" }, body: aiText });
+        });
       });
-      req.on('error', reject);
+      req.on('error', () => resolve({ statusCode: 200, body: JSON.stringify({ rates: { CNY: 7.24, HKD: 7.82 }, prices: [] }) }));
       req.write(payload);
       req.end();
     });
-  };
-
-  try {
-    const result = await callGemini();
-    if (result.ok) {
-      // 提取 AI 返回的文本并清理
-      const aiText = result.data.candidates[0].content.parts[0].text.replace(/```json/g, "").replace(/```/g, "").trim();
-      return { statusCode: 200, body: aiText };
-    }
-    throw new Error('Gemini Down');
-  } catch (error) {
-    // 备选保底：Gemini 额度用完时，返回默认汇率
+  } catch (e) {
     return { statusCode: 200, body: JSON.stringify({ rates: { CNY: 7.24, HKD: 7.82 }, prices: [] }) };
   }
 };
