@@ -10,7 +10,7 @@ import { AssetChartModal } from './components/AssetChartModal';
 import { HistoryChart } from './components/HistoryChart';
 import { AuthModal } from './components/AuthModal';
 import { Holding, AssetCategory, ChartDataPoint, HistoryPoint, User } from './types';
-import { fetchMarketData } from './services/geminiService';
+import { fetchMarketData } from './geminiService';
 alert("代码已更新！即将启动探针...");
 const INITIAL_HOLDINGS: Holding[] = [
   { id: '1', symbol: 'Cash', quantity: 15000, category: AssetCategory.Cash, currency: 'USD', currentPrice: 1, lastUpdated: Date.now() },
