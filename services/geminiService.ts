@@ -1,30 +1,32 @@
 import { Holding } from "../types";
 
-export const fetchMarketData = async (holdings: Holding[]): Promise<{ rates: Record<string, number>; prices: Record<string, number> }> => {
+export const fetchMarketData = async (holdings: Holding[]) => {
   const defaultRates = { USD: 1, CNY: 7.2, HKD: 7.8 };
   
   if (holdings.length === 0) return { rates: defaultRates, prices: {} };
 
-  // 整理资产列表发送给后端
   const uniqueItems = new Set(holdings.filter(h => h.category !== 'Cash').map(h => `${h.symbol} (${h.currency})`));
   const itemsString = Array.from(uniqueItems).join(", ");
-  
-  if (!itemsString) return { rates: defaultRates, prices: {} };
 
   try {
-    // 关键点：去敲我们自己的 Netlify Function 后门
+    // 关键：这里去呼叫你那个已经通了的后端链接
     const response = await fetch('/.netlify/functions/get_data', {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ holdingsString: itemsString })
     });
 
+    if (!response.ok) throw new Error('Backend unresponsive');
+    
+    // 这里拿到的是你刚才在网页里看到的那串 JSON
     const data = await response.json();
     
-    // 以下保留你原本的映射逻辑，确保 UI 依然能正常显示
+    // 重新映射回 App 需要的格式
     const finalPriceMap: Record<string, number> = {};
     if (data.prices && Array.isArray(data.prices)) {
       holdings.forEach(h => {
         if (h.category === 'Cash') return;
+        // 模糊匹配 symbol，确保数据能对上
         const match = data.prices.find((p: any) => p.symbol.includes(h.symbol));
         if (match) finalPriceMap[h.symbol] = match.price;
       });
@@ -34,9 +36,8 @@ export const fetchMarketData = async (holdings: Holding[]): Promise<{ rates: Rec
       rates: { ...defaultRates, ...data.rates },
       prices: finalPriceMap
     };
-
   } catch (error) {
-    console.error("安全连接失败，使用默认汇率:", error);
+    console.error("前端解析数据失败，检查后端返回格式:", error);
     return { rates: defaultRates, prices: {} };
   }
 };
