@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Amber Treasury | Pro 2.8 Full-Stack</title>
+    <title>Amber Treasury | Ultimate Pro 3.0</title>
     <script src="https://cdn.staticfile.org/react/16.14.0/umd/react.production.min.js"></script>
     <script src="https://cdn.staticfile.org/react-dom/16.14.0/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/lucide@0.263.0/dist/umd/lucide.min.js"></script>
@@ -12,8 +12,8 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
         body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #fcfcfd; color: #1e293b; }
-        .amber-card { background: white; border-radius: 40px; border: 1px solid #f1f5f9; box-shadow: 0 4px 24px rgba(0,0,0,0.03); }
-        .modal-bg { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(12px); }
+        .amber-card { background: white; border-radius: 48px; border: 1px solid #f1f5f9; box-shadow: 0 4px 24px rgba(0,0,0,0.03); }
+        .modal-bg { background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(10px); z-index: 100; }
         .rotate-sync { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     </style>
@@ -65,25 +65,29 @@
         };
 
         function App() {
-            const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('amber_user_v3')));
-            const [holdings, setHoldings] = useState(() => JSON.parse(localStorage.getItem('amber_holdings_v3')) || []);
-            const [watchlist, setWatchlist] = useState(() => JSON.parse(localStorage.getItem('amber_watchlist_v3')) || []);
-            const [history, setHistory] = useState(() => JSON.parse(localStorage.getItem('amber_history_v3')) || []);
+            // --- 核心状态 ---
+            const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('amber_u_v3')));
+            const [holdings, setHoldings] = useState(() => JSON.parse(localStorage.getItem('amber_h_v3')) || []);
+            const [watchlist, setWatchlist] = useState(() => JSON.parse(localStorage.getItem('amber_w_v3')) || []);
             const [rates, setRates] = useState({ USD: 1, CNY: 7.24 });
             const [prices, setPrices] = useState({});
             const [isSyncing, setIsSyncing] = useState(false);
-            const [modal, setModal] = useState({ open: false, type: 'portfolio' });
+            
+            // --- 弹窗状态 ---
+            const [addModal, setAddModal] = useState({ open: false, type: 'portfolio' });
+            const [qtyModal, setQtyModal] = useState({ open: false, id: null, type: 'add' }); // 加减数量卡片
             const [form, setForm] = useState({ symbol: '', quantity: '', category: 'Stock', currency: 'USD' });
+            const [qtyInput, setQtyInput] = useState('');
 
             useEffect(() => {
                 if (user) {
-                    localStorage.setItem('amber_user_v3', JSON.stringify(user));
-                    localStorage.setItem('amber_holdings_v3', JSON.stringify(holdings));
-                    localStorage.setItem('amber_watchlist_v3', JSON.stringify(watchlist));
-                    localStorage.setItem('amber_history_v3', JSON.stringify(history));
+                    localStorage.setItem('amber_u_v3', JSON.stringify(user));
+                    localStorage.setItem('amber_h_v3', JSON.stringify(holdings));
+                    localStorage.setItem('amber_w_v3', JSON.stringify(watchlist));
                 }
-            }, [user, holdings, watchlist, history]);
+            }, [user, holdings, watchlist]);
 
+            // --- 核心同步：彻底移除 ?. 语法解决 image_f0aaa4 报错 ---
             const sync = async (hList = holdings, wList = watchlist) => {
                 setIsSyncing(true);
                 try {
@@ -91,21 +95,13 @@
                         method: 'POST', body: JSON.stringify({ holdings: hList.concat(wList) }) 
                     });
                     const data = await response.json();
-                    
-                    // 修复 image_f0aaa4 里的语法报错：不使用 ?. 符号
                     if (data && data.rates) setRates(data.rates);
                     if (data && data.prices) setPrices(data.prices);
-                    
-                    let currentTotalUSD = 0;
-                    hList.forEach(function(h) {
-                        var p = h.category === 'Cash' ? 1 : (data.prices && data.prices[h.symbol] ? data.prices[h.symbol] : 0);
-                        var r = h.currency === 'CNY' ? (data.rates && data.rates.CNY ? data.rates.CNY : 7.24) : 1;
-                        currentTotalUSD += (h.quantity * p) / r;
-                    });
-                    if(currentTotalUSD > 0) setHistory(prev => prev.concat({ time: new Date().toLocaleTimeString(), val: currentTotalUSD }).slice(-50));
-                } catch (e) { console.error("Sync Error", e); } 
+                } catch (e) { console.error("Sync Failed", e); } 
                 finally { setTimeout(() => setIsSyncing(false), 800); }
             };
+
+            useEffect(() => { if (user) sync(); }, [user]);
 
             const stats = useMemo(() => {
                 let totalUSD = 0;
@@ -120,44 +116,103 @@
                 return { usd: totalUSD, pie: Object.keys(CATEGORIES).map(c => ({ name: c, color: CATEGORIES[c].color, percent: totalUSD > 0 ? (catTotals[c] || 0) / totalUSD : 0 })) };
             }, [holdings, rates, prices]);
 
-            const addItem = () => {
+            // --- 修改数量的业务逻辑 ---
+            const commitQtyChange = () => {
+                const val = parseFloat(qtyInput) || 0;
+                setHoldings(prev => prev.map(h => {
+                    if (h.id === qtyModal.id) {
+                        const newQty = qtyModal.type === 'add' ? h.quantity + val : Math.max(0, h.quantity - val);
+                        return Object.assign({}, h, { quantity: newQty });
+                    }
+                    return h;
+                }));
+                setQtyModal({ open: false });
+                setQtyInput('');
+            };
+
+            const addAsset = () => {
                 const item = Object.assign({}, form, { id: Date.now(), quantity: parseFloat(form.quantity) || 0 });
-                if (modal.type === 'portfolio') setHoldings(holdings.concat(item));
+                if (addModal.type === 'portfolio') setHoldings(holdings.concat(item));
                 else setWatchlist(watchlist.concat(item));
-                setModal({ open: false });
-                sync(modal.type === 'portfolio' ? holdings.concat(item) : holdings, modal.type === 'watchlist' ? watchlist.concat(item) : watchlist);
+                setAddModal({ open: false });
+                sync(addModal.type === 'portfolio' ? holdings.concat(item) : holdings, addModal.type === 'watchlist' ? watchlist.concat(item) : watchlist);
                 setForm({ symbol: '', quantity: '', category: 'Stock', currency: 'USD' });
             };
 
-            const updateQty = (id, delta) => {
-                setHoldings(prev => prev.map(h => h.id === id ? Object.assign({}, h, { quantity: Math.max(0, h.quantity + delta) }) : h));
-            };
-
             if (!user) return (
-                <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6"><div className="bg-white p-12 rounded-[48px] w-full max-w-sm shadow-2xl text-center font-bold"><div className="bg-indigo-600 w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-xl"><Icon name="sparkles" size={32} className="text-white" /></div><h1 className="text-3xl font-black mb-10 tracking-tight uppercase">Amber Treasury</h1><button onClick={() => setUser({name:'Amber'})} className="w-full p-5 bg-indigo-600 text-white font-black rounded-2xl uppercase tracking-widest text-xs">Login</button></div></div>
+                <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6"><div className="bg-white p-12 rounded-[48px] w-full max-w-sm shadow-2xl text-center"><div className="bg-indigo-600 w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-xl"><Icon name="sparkles" size={32} className="text-white" /></div><h1 className="text-3xl font-black mb-10 tracking-tight uppercase">Amber Treasury</h1><button onClick={() => setUser({name:'Amber'})} className="w-full p-5 bg-indigo-600 text-white font-black rounded-2xl uppercase tracking-widest text-xs">Access Box</button></div></div>
             );
 
             return (
-                <div className="min-h-screen p-4 md:p-10 max-w-[1400px] mx-auto space-y-8 animate-in fade-in duration-700">
+                <div className="min-h-screen p-4 md:p-10 max-w-[1400px] mx-auto space-y-8 animate-in fade-in duration-700 font-bold">
+                    {/* Header */}
                     <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-3 font-bold"><div className="bg-indigo-600 p-2.5 rounded-2xl text-white shadow-lg"><Icon name="sparkles" /></div><h1 className="text-2xl font-black tracking-tight uppercase">Amber Treasury</h1></div>
+                        <div className="flex items-center gap-3"><div className="bg-indigo-600 p-2.5 rounded-2xl text-white shadow-lg"><Icon name="sparkles" /></div><h1 className="text-2xl font-black tracking-tight uppercase leading-none">Amber Treasury</h1></div>
                         <button onClick={() => sync()} disabled={isSyncing} className="flex items-center gap-3 px-6 py-3 bg-white rounded-2xl font-black text-[10px] tracking-widest uppercase border border-indigo-50 shadow-sm"><Icon name="refresh-cw" size={14} className={isSyncing ? "rotate-sync" : ""} />{isSyncing ? "Syncing..." : "Sync Now"}</button>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 font-bold">
+                    {/* Dashboard */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="amber-card p-8"><p className="text-[10px] text-slate-400 uppercase tracking-widest mb-2 leading-none">Net Worth (USD)</p><h2 className="text-4xl font-black text-slate-900 tracking-tighter">${Math.floor(stats.usd).toLocaleString()}</h2><div className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-indigo-50 text-indigo-600 rounded-[24px]"><Icon name="dollar-sign" size={28}/></div></div>
                         <div className="amber-card p-8"><p className="text-[10px] text-slate-400 uppercase tracking-widest mb-2 leading-none">Net Worth (CNY)</p><h2 className="text-4xl font-black text-slate-900 tracking-tighter">¥{Math.floor(stats.usd * rates.CNY).toLocaleString()}</h2><div className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-blue-50 text-blue-600 rounded-[24px]"><Icon name="wallet" size={28}/></div></div>
-                        <div className="amber-card p-8"><p className="text-[10px] text-slate-400 uppercase tracking-widest mb-2 leading-none">Positions</p><h2 className="text-4xl font-black text-green-500 tracking-tighter uppercase">{holdings.length} Assets</h2></div>
+                        <div className="amber-card p-8 text-center flex flex-col items-center justify-center"><p className="text-[10px] text-slate-400 uppercase tracking-widest mb-2">Portfolio Allocation</p><div className="flex gap-2">{stats.pie.filter(p => p.percent > 0).map(p => <div key={p.name} className="w-3 h-3 rounded-full" style={{backgroundColor: p.color}}></div>)}</div></div>
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        <div className="lg:col-span-1 amber-card p-10 font-bold"><h3 className="font-black text-lg mb-10 flex items-center gap-3"><Icon name="pie-chart" className="text-indigo-600"/> Allocation</h3><AllocationPie data={stats.pie} /></div>
-                        <div className="lg:col-span-2 amber-card p-10 font-bold overflow-hidden"><div className="p-4 border-b border-slate-50 flex justify-between items-center"><h3 className="font-black text-xl tracking-tighter">Portfolio Assets</h3><button onClick={() => setModal({open:true, type:'portfolio'})} className="bg-slate-900 text-white px-8 py-4 rounded-2xl text-xs font-black shadow-xl">Add Asset</button></div><table className="w-full text-left mt-4"><thead className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50"><tr><th className="px-6 py-6">Asset</th><th className="px-6 py-6 text-right">Value (USD)</th><th className="px-6 py-6 text-center">Action</th></tr></thead><tbody className="divide-y divide-slate-50">{holdings.map(h => (<tr key={h.id} className="hover:bg-slate-50/30 transition-colors"><td className="px-6 py-8 flex items-center gap-4"><div className="w-10 h-10 rounded-xl flex items-center justify-center font-black text-white text-xs" style={{backgroundColor: CATEGORIES[h.category] ? CATEGORIES[h.category].color : '#cbd5e1'}}>{h.symbol[0]}</div><div><p className="text-lg font-black leading-none">{h.symbol} <span className="text-[10px] bg-slate-100 px-2 py-1 rounded-lg text-slate-500 uppercase">{h.currency}</span></p><p className="text-[10px] text-slate-400 uppercase mt-1">Qty: {h.quantity.toLocaleString()}</p></div></td><td className="px-6 py-8 text-right text-xl font-black">${Math.floor(h.currency === 'CNY' ? (h.quantity * (prices[h.symbol] || 0) / rates.CNY) : (h.quantity * (h.category === 'Cash' ? 1 : (prices[h.symbol] || 0)))).toLocaleString()}</td><td className="px-6 py-8"><div className="flex items-center justify-center gap-3"><button onClick={() => updateQty(h.id, 1)} className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-600 hover:text-white transition-colors"><Icon name="plus" size={14}/></button><button onClick={() => updateQty(h.id, -1)} className="p-2 bg-slate-50 text-slate-400 rounded-lg hover:bg-slate-200"><Icon name="minus" size={14}/></button><button onClick={() => setHoldings(holdings.filter(x => x.id !== h.id))} className="p-2 text-slate-300 hover:text-red-500"><Icon name="trash-2" size={14}/></button></div></td></tr>))}</tbody></table></div>
+                        <div className="lg:col-span-1 amber-card p-10 flex flex-col items-center"><AllocationPie data={stats.pie} /></div>
+                        
+                        <div className="lg:col-span-2 amber-card overflow-hidden">
+                            <div className="p-10 border-b border-slate-50 flex justify-between items-center bg-slate-50/20">
+                                <h3 className="font-black text-slate-900 text-xl tracking-tighter uppercase">Portfolio Assets</h3>
+                                <button onClick={() => setAddModal({open:true, type:'portfolio'})} className="bg-slate-900 text-white px-8 py-4 rounded-2xl text-[10px] font-black shadow-xl">Add Asset</button>
+                            </div>
+                            <table className="w-full text-left">
+                                <thead className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50"><tr><th className="px-6 py-6">Asset</th><th className="px-6 py-6 text-right">Value (USD)</th><th className="px-6 py-6 text-center">Action</th></tr></thead>
+                                <tbody className="divide-y divide-slate-50">
+                                    {holdings.map(h => (<tr key={h.id} className="hover:bg-slate-50/30 transition-colors font-jakarta"><td className="px-6 py-8 flex items-center gap-4"><div className="w-10 h-10 rounded-xl flex items-center justify-center font-black text-white text-xs" style={{backgroundColor: CATEGORIES[h.category] ? CATEGORIES[h.category].color : '#cbd5e1'}}>{h.symbol[0]}</div><div><p className="text-lg font-black leading-none">{h.symbol} <span className="text-[10px] bg-slate-100 px-2 py-1 rounded-lg text-slate-500 uppercase">{h.currency}</span></p><p className="text-[10px] text-slate-400 uppercase mt-1">Qty: {h.quantity.toLocaleString()}</p></div></td><td className="px-6 py-8 text-right text-xl font-black">${Math.floor(h.currency === 'CNY' ? (h.quantity * (prices[h.symbol] || 0) / rates.CNY) : (h.quantity * (h.category === 'Cash' ? 1 : (prices[h.symbol] || 0)))).toLocaleString()}</td><td className="px-6 py-8"><div className="flex items-center justify-center gap-3"><button onClick={() => setQtyModal({open:true, id:h.id, type:'add'})} className="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><Icon name="plus" size={14}/></button><button onClick={() => setQtyModal({open:true, id:h.id, type:'sub'})} className="p-2 bg-slate-50 text-slate-400 rounded-lg"><Icon name="minus" size={14}/></button><button onClick={() => setHoldings(holdings.filter(x => x.id !== h.id))} className="p-2 text-slate-200 hover:text-red-500"><Icon name="trash-2" size={14}/></button></div></td></tr>))}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
 
-                    {/* Add Modal */}
-                    {modal.open && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 modal-bg animate-in fade-in duration-200"><div className="bg-white p-10 rounded-[48px] w-full max-w-md shadow-2xl font-bold"><div className="flex justify-between items-center mb-8"><h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Add to {modal.type}</h3><button onClick={() => setModal({open:false})} className="text-slate-300 hover:text-slate-900"><Icon name="x" size={24} /></button></div><div className="space-y-4"><div className="space-y-1"><p className="text-[10px] font-black text-slate-400 uppercase ml-2 leading-none">Symbol</p><input placeholder="e.g. BTC, Gold, AAPL" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none" value={form.symbol} onChange={e => setForm(Object.assign({}, form, { symbol: e.target.value.toUpperCase() }))} /></div><div className="space-y-1"><p className="text-[10px] font-black text-slate-400 uppercase ml-2 leading-none">Quantity Owned</p><input type="number" placeholder="0" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none" value={form.quantity} onChange={e => setForm(Object.assign({}, form, { quantity: e.target.value }))} /></div><div className="grid grid-cols-2 gap-4"><div className="space-y-1"><p className="text-[10px] font-black text-slate-400 uppercase ml-2 leading-none">Currency</p><select className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-black" value={form.currency} onChange={e => setForm(Object.assign({}, form, { currency: e.target.value }))}><option value="USD">USD ($)</option><option value="CNY">CNY (¥)</option></select></div><div className="space-y-1"><p className="text-[10px] font-black text-slate-400 uppercase ml-2 leading-none">Category</p><select className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-black" value={form.category} onChange={e => setForm(Object.assign({}, form, { category: e.target.value }))}>{Object.keys(CATEGORIES).map(c => <option key={c} value={c}>{CATEGORIES[c].label}</option>)}</select></div></div><button onClick={addItem} className="w-full mt-8 p-5 bg-indigo-600 text-white font-black rounded-2xl uppercase tracking-widest text-xs shadow-xl shadow-indigo-100">Add Item</button></div></div></div>
+                    {/* Watchlist回归 */}
+                    <div className="amber-card overflow-hidden">
+                        <div className="p-10 border-b border-slate-50 flex justify-between items-center bg-indigo-50/10 text-indigo-900">
+                            <h3 className="font-black text-xl tracking-tighter uppercase">Market Watchlist</h3>
+                            <button onClick={() => setAddModal({open:true, type:'watchlist'})} className="bg-indigo-600 text-white px-8 py-4 rounded-2xl text-[10px] font-black shadow-xl uppercase tracking-widest">Add Item</button>
+                        </div>
+                        <table className="w-full text-left">
+                            <thead className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50"><tr><th className="px-12 py-6">Target</th><th className="px-12 py-6 text-right">Price (Live)</th><th className="px-12 py-6 text-center">Action</th></tr></thead>
+                            <tbody className="divide-y divide-slate-50">
+                                {watchlist.map(w => (
+                                    <tr key={w.id} className="hover:bg-indigo-50/30 transition-colors">
+                                        <td className="px-12 py-8 text-lg font-black text-slate-900">{w.symbol}</td>
+                                        <td className="px-12 py-8 text-right text-indigo-600 text-xl font-black">${prices[w.symbol] ? prices[w.symbol].toLocaleString() : '---'}</td>
+                                        <td className="px-12 py-8 text-center"><button onClick={() => setWatchlist(watchlist.filter(x => x.id !== w.id))} className="p-2 text-slate-200 hover:text-red-500"><Icon name="trash-2" size={14}/></button></td>
+                                    </tr>
+                                ))}
+                                {watchlist.length === 0 && <tr><td colSpan="3" className="py-12 text-center text-slate-300 font-bold uppercase text-[10px] tracking-widest">List is empty</td></tr>}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* 精准数量调整卡片 */}
+                    {qtyModal.open && (
+                        <div className="fixed inset-0 modal-bg flex items-center justify-center p-6 animate-in fade-in duration-200">
+                            <div className="bg-white p-10 rounded-[48px] w-full max-w-sm shadow-2xl">
+                                <h3 className="text-xl font-black mb-6 uppercase tracking-tight text-slate-900">{qtyModal.type === 'add' ? '增加数量' : '减少数量'}</h3>
+                                <input type="number" placeholder="输入要变动的数值" className="w-full p-5 bg-slate-50 border border-slate-100 rounded-3xl outline-none font-black text-lg mb-8" value={qtyInput} onChange={e => setQtyInput(e.target.value)} autoFocus />
+                                <div className="flex gap-4">
+                                    <button onClick={() => setQtyModal({open:false})} className="flex-1 p-4 bg-slate-50 text-slate-400 rounded-2xl uppercase text-[10px]">取消</button>
+                                    <button onClick={commitQtyChange} className="flex-1 p-4 bg-indigo-600 text-white rounded-2xl uppercase text-[10px] shadow-lg shadow-indigo-100">确认修改</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Add Asset Modal */}
+                    {addModal.open && (
+                        <div className="fixed inset-0 modal-bg flex items-center justify-center p-6 animate-in fade-in duration-200"><div className="bg-white p-10 rounded-[48px] w-full max-w-md shadow-2xl font-bold"><div className="flex justify-between items-center mb-8"><h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Add to {addModal.type}</h3><button onClick={() => setAddModal({open:false})} className="text-slate-300 hover:text-slate-900"><Icon name="x" size={24} /></button></div><div className="space-y-4"><div className="space-y-1"><p className="text-[10px] font-black text-slate-400 uppercase ml-2 leading-none">Symbol</p><input placeholder="e.g. BTC, Gold, AAPL" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-3xl outline-none" value={form.symbol} onChange={e => setForm(Object.assign({}, form, { symbol: e.target.value.toUpperCase() }))} /></div><div className="space-y-1"><p className="text-[10px] font-black text-slate-400 uppercase ml-2 leading-none">Quantity Owned</p><input type="number" placeholder="0" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-3xl outline-none" value={form.quantity} onChange={e => setForm(Object.assign({}, form, { quantity: e.target.value }))} /></div><div className="grid grid-cols-2 gap-4"><div className="space-y-1"><p className="text-[10px] font-black text-slate-400 uppercase ml-2 leading-none">Currency</p><select className="w-full p-4 bg-slate-50 border border-slate-100 rounded-3xl font-black" value={form.currency} onChange={e => setForm(Object.assign({}, form, { currency: e.target.value }))}><option value="USD">USD ($)</option><option value="CNY">CNY (¥)</option></select></div><div className="space-y-1"><p className="text-[10px] font-black text-slate-400 uppercase ml-2 leading-none">Category</p><select className="w-full p-4 bg-slate-50 border border-slate-100 rounded-3xl font-black" value={form.category} onChange={e => setForm(Object.assign({}, form, { category: e.target.value }))}>{Object.keys(CATEGORIES).map(c => <option key={c} value={c}>{CATEGORIES[c].label}</option>)}</select></div></div><button onClick={addAsset} className="w-full mt-8 p-5 bg-indigo-600 text-white font-black rounded-3xl uppercase tracking-widest text-xs shadow-xl shadow-indigo-100">Add Item</button></div></div></div>
                     )}
                 </div>
             );
