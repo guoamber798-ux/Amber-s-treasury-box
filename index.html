@@ -3,20 +3,21 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Amber's Treasury Box | Pro Max</title>
+    <title>Amber Treasury | Professional Pro</title>
     
-    <script src="https://lf6-cdn-tos.bytecdntp.com/cdn/expire-1-M/react/17.0.2/umd/react.production.min.js"></script>
-    <script src="https://lf6-cdn-tos.bytecdntp.com/cdn/expire-1-M/react-dom/17.0.2/umd/react-dom.production.min.js"></script>
+    <script src="https://cdn.staticfile.org/react/16.14.0/umd/react.production.min.js"></script>
+    <script src="https://cdn.staticfile.org/react-dom/16.14.0/umd/react-dom.production.min.js"></script>
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.1.16/Recharts.js"></script>
     
-    <script src="https://lf6-cdn-tos.bytecdntp.com/cdn/expire-1-M/lucide/0.263.0/lucide.min.js"></script>
+    <script src="https://cdn.staticfile.org/lucide/0.263.0/lucide.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://lf6-cdn-tos.bytecdntp.com/cdn/expire-1-M/babel-standalone/7.17.6/babel.min.js"></script>
+    <script src="https://cdn.staticfile.org/babel-standalone/6.26.0/babel.min.js"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
         body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; color: #1e293b; }
-        .chart-container .recharts-cartesian-grid-horizontal line { stroke: #f1f5f9; }
+        .amber-card { background: white; border-radius: 40px; border: 1px solid #f1f5f9; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02); }
     </style>
 </head>
 <body>
@@ -26,22 +27,13 @@
         const { useState, useEffect, useMemo } = React;
         const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } = window.Recharts;
 
-        // --- 全局配置与模拟数据 ---
-        const AssetCategory = { Cash: 'Cash', Stock: 'Stock', Crypto: 'Crypto', Commodity: 'Commodity' };
-        const STORAGE_KEYS = { USER: 'amber_user_pro', HOLDINGS: 'amber_holdings_pro', HISTORY: 'amber_history_pro' };
-
-        const INITIAL_HOLDINGS = [
-            { id: '1', symbol: 'Cash', quantity: 15000, category: 'Cash', currency: 'USD', price: 1 },
-            { id: '2', symbol: 'Cash', quantity: 50000, category: 'Cash', currency: 'CNY', price: 1 }
-        ];
-
-        // --- 子组件：图标 ---
+        // --- 子组件：图标渲染 ---
         const Icon = ({ name, size = 20, className = "" }) => {
             useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name]);
             return <i data-lucide={name} style={{ width: size, height: size }} className={className}></i>;
         };
 
-        // --- 子组件：全屏登录 [复刻 AuthModal] ---
+        // --- 子组件：登录页 [复刻 AuthModal] ---
         const AuthModal = ({ onLogin }) => {
             const [name, setName] = useState('');
             return (
@@ -50,14 +42,14 @@
                         <div className="bg-indigo-600 w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-xl">
                             <Icon name="sparkles" size={32} className="text-white" />
                         </div>
-                        <h1 className="text-3xl font-black text-center mb-2">Amber Treasury</h1>
-                        <p className="text-slate-400 text-center mb-10">专业级资产管理探针已就绪</p>
+                        <h1 className="text-3xl font-black text-center mb-2 text-slate-900">Amber Treasury</h1>
+                        <p className="text-slate-400 text-center mb-10">专业资产探针已就绪</p>
                         <input 
                             type="text" value={name} onChange={(e) => setName(e.target.value)}
-                            placeholder="请输入您的尊称"
-                            className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl mb-6 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                            placeholder="请输入名字进入"
+                            className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl mb-6 focus:ring-2 focus:ring-indigo-500 outline-none"
                         />
-                        <button onClick={() => name && onLogin(name)} className="w-full p-5 bg-indigo-600 text-white font-black rounded-2xl shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all">进入仪表盘</button>
+                        <button onClick={() => name && onLogin(name)} className="w-full p-5 bg-indigo-600 text-white font-black rounded-2xl hover:bg-indigo-700 transition-all">确认进入</button>
                     </div>
                 </div>
             );
@@ -65,51 +57,40 @@
 
         // --- 主程序 ---
         function App() {
-            // 状态管理：继承所有原始功能
-            const [user, setUser] = useState(() => JSON.parse(localStorage.getItem(STORAGE_KEYS.USER)));
-            const [holdings, setHoldings] = useState(() => JSON.parse(localStorage.getItem(STORAGE_KEYS.HOLDINGS)) || INITIAL_HOLDINGS);
-            const [history, setHistory] = useState(() => JSON.parse(localStorage.getItem(STORAGE_KEYS.HISTORY)) || [
-                { time: '09:00', val: 21800 }, { time: '12:00', val: 21944 }, { time: '18:00', val: 22100 }
+            const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('amber_user')));
+            const [holdings, setHoldings] = useState(() => JSON.parse(localStorage.getItem('amber_holdings')) || [
+                { id: '1', symbol: 'Cash', quantity: 15000, category: 'Cash', currency: 'USD' },
+                { id: '2', symbol: 'Cash', quantity: 50000, category: 'Cash', currency: 'CNY' }
             ]);
             const [rates, setRates] = useState({ CNY: 7.24 });
             const [isRefreshing, setIsRefreshing] = useState(false);
+            
+            // 模拟历史数据
+            const history = [
+                { time: '09:00', val: 21800 }, { time: '12:00', val: 21944 }, { time: '18:00', val: 22100 }
+            ];
 
-            // 自动同步到本地存储
-            useEffect(() => { localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user)); }, [user]);
-            useEffect(() => { localStorage.setItem(STORAGE_KEYS.HOLDINGS, JSON.stringify(holdings)); }, [holdings]);
-            useEffect(() => { localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(history)); }, [history]);
-
-            // 核心计算逻辑
-            const stats = useMemo(() => {
-                let totalUSD = 0;
-                const categories = {};
-                holdings.forEach(h => {
-                    const valUSD = h.quantity / (h.currency === 'CNY' ? rates.CNY : 1);
-                    totalUSD += valUSD;
-                    categories[h.category] = (categories[h.category] || 0) + valUSD;
-                });
-                return {
-                    usd: totalUSD,
-                    cny: totalUSD * rates.CNY,
-                    allocation: Object.entries(categories).map(([name, value]) => ({ name, value }))
-                };
+            // 核心计算
+            const totalUSD = useMemo(() => {
+                return holdings.reduce((sum, h) => sum + (h.quantity / (h.currency === 'CNY' ? rates.CNY : 1)), 0);
             }, [holdings, rates]);
 
-            // 连接数据大脑：通过 Cloudflare Worker 更新
+            // 连接数据大脑
             const refresh = async () => {
                 setIsRefreshing(true);
                 try {
-                    const url = 'https://amber-s-treasury-box.guo-amber798.workers.dev';
-                    const res = await fetch(url, { method: 'POST', body: JSON.stringify({}) });
+                    const res = await fetch('https://amber-s-treasury-box.guo-amber798.workers.dev', { method: 'POST', body: JSON.stringify({}) });
                     const data = await res.json();
-                    if (data.rates) setRates(prev => ({ ...prev, ...data.rates }));
-                    // 记录财富演化点
-                    setHistory(prev => [...prev, { time: new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}), val: stats.usd }].slice(-20));
+                    if (data.rates) setRates(data.rates);
                 } catch (e) { console.error(e); } finally { setIsRefreshing(false); }
             };
 
-            // 首次加载自动探针同步
-            useEffect(() => { if (user) refresh(); }, []);
+            useEffect(() => {
+                if (user) {
+                    localStorage.setItem('amber_user', JSON.stringify(user));
+                    refresh();
+                }
+            }, [user]);
 
             if (!user) return <AuthModal onLogin={(name) => setUser({ username: name })} />;
 
@@ -121,82 +102,74 @@
                             <div className="bg-indigo-600 p-2.5 rounded-2xl text-white shadow-xl shadow-indigo-100"><Icon name="sparkles" /></div>
                             <h1 className="text-2xl font-black tracking-tight uppercase">Amber Treasury</h1>
                         </div>
-                        <div className="flex items-center gap-4">
+                        <div className="flex gap-4">
                             <div className="bg-green-50 text-green-600 px-4 py-2 rounded-full text-[10px] font-black border border-green-100 flex items-center gap-2">
-                                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> {isRefreshing ? 'SYNCING...' : 'AUTO-SYNCING'}
+                                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> {isRefreshing ? 'SYNCING...' : 'LIVE'}
                             </div>
-                            <button onClick={() => { if(confirm("确定登出吗？")) setUser(null); }} className="p-2 text-slate-300 hover:text-red-400 transition-colors"><Icon name="log-out" /></button>
                         </div>
                     </div>
 
-                    {/* Stats [复刻 image_efa7d4.jpg] */}
+                    {/* Stats */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm relative overflow-hidden group">
+                        <div className="amber-card p-8 relative overflow-hidden group">
                             <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Net Worth (USD)</p>
-                            <h2 className="text-4xl font-black text-slate-900">${Math.floor(stats.usd).toLocaleString()}</h2>
-                            <div className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-indigo-50 text-indigo-600 rounded-[24px] group-hover:bg-indigo-600 group-hover:text-white transition-all"><Icon name="dollar-sign" size={28}/></div>
+                            <h2 className="text-4xl font-black text-slate-900">${Math.floor(totalUSD).toLocaleString()}</h2>
+                            <div className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-indigo-50 text-indigo-600 rounded-[24px]"><Icon name="dollar-sign" size={28}/></div>
                         </div>
-                        <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm relative overflow-hidden group">
+                        <div className="amber-card p-8 relative overflow-hidden">
                             <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Net Worth (CNY)</p>
-                            <h2 className="text-4xl font-black text-slate-900">¥{Math.floor(stats.cny).toLocaleString()}</h2>
-                            <div className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-blue-50 text-blue-600 rounded-[24px] group-hover:bg-blue-600 group-hover:text-white transition-all"><Icon name="wallet" size={28}/></div>
+                            <h2 className="text-4xl font-black text-slate-900">¥{Math.floor(totalUSD * rates.CNY).toLocaleString()}</h2>
+                            <div className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-blue-50 text-blue-600 rounded-[24px]"><Icon name="wallet" size={28}/></div>
                         </div>
-                        <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm relative overflow-hidden group">
+                        <div className="amber-card p-8 relative overflow-hidden">
                             <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Primary Asset</p>
-                            <h2 className="text-4xl font-black text-slate-900">{stats.allocation[0]?.name || 'Cash'}</h2>
-                            <div className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-indigo-50 text-indigo-600 rounded-[24px] group-hover:bg-indigo-600 group-hover:text-white transition-all"><Icon name="trending-up" size={28}/></div>
+                            <h2 className="text-4xl font-black text-slate-900">Cash</h2>
+                            <div className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-indigo-50 text-indigo-600 rounded-[24px]"><Icon name="trending-up" size={28}/></div>
                         </div>
                     </div>
 
-                    {/* Charts Row [复刻 image_efa7d4.jpg] */}
+                    {/* Charts [复刻 image_efa7d4.jpg] */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        <div className="lg:col-span-2 bg-white p-10 rounded-[48px] border border-slate-100 shadow-sm chart-container">
-                            <div className="flex justify-between items-center mb-10">
-                                <h3 className="font-black text-lg flex items-center gap-3 text-slate-800"><Icon name="history" className="text-indigo-600"/> Wealth Evolution</h3>
-                                <button onClick={refresh} className="p-2 bg-slate-50 rounded-xl hover:bg-indigo-50 transition-colors"><Icon name="refresh-cw" size={16}/></button>
-                            </div>
+                        <div className="lg:col-span-2 amber-card p-10">
+                            <h3 className="font-black text-lg mb-10 flex items-center gap-3 text-slate-800"><Icon name="history" className="text-indigo-600"/> Wealth Evolution</h3>
                             <div className="h-[320px] w-full">
                                 <ResponsiveContainer>
                                     <LineChart data={history}>
-                                        <CartesianGrid strokeDasharray="0" vertical={false} />
+                                        <CartesianGrid strokeDasharray="0" vertical={false} stroke="#f1f5f9" />
                                         <XAxis dataKey="time" hide />
                                         <YAxis hide domain={['dataMin - 500', 'dataMax + 500']} />
-                                        <Tooltip contentStyle={{borderRadius:'20px', border:'none', boxShadow:'0 10px 25px rgba(0,0,0,0.05)'}} />
+                                        <Tooltip contentStyle={{borderRadius:'20px', border:'none'}} />
                                         <Line type="monotone" dataKey="val" stroke="#6366f1" strokeWidth={6} dot={false} />
                                     </LineChart>
                                 </ResponsiveContainer>
                             </div>
                         </div>
-                        <div className="bg-white p-10 rounded-[48px] border border-slate-100 shadow-sm flex flex-col items-center">
+                        <div className="amber-card p-10 flex flex-col items-center">
                             <h3 className="font-black text-lg mb-10 self-start flex items-center gap-3 text-slate-800"><Icon name="pie-chart" className="text-indigo-600"/> Allocation</h3>
                             <div className="h-[280px] w-full relative">
                                 <ResponsiveContainer>
                                     <PieChart>
-                                        <Pie data={stats.allocation} innerRadius={80} outerRadius={105} paddingAngle={8} dataKey="value">
-                                            {stats.allocation.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={['#6366f1', '#818cf8', '#c7d2fe'][index % 3]} />
-                                            ))}
+                                        <Pie data={[{name:'Cash', value:100}]} innerRadius={80} outerRadius={105} paddingAngle={8} dataKey="value">
+                                            <Cell fill="#6366f1" />
                                         </Pie>
                                     </PieChart>
                                 </ResponsiveContainer>
                                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                                     <p className="text-4xl font-black text-slate-900 tracking-tighter">100%</p>
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">In Position</p>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">In Position</p>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Asset Table [复刻 image_efa7d4.jpg] */}
-                    <div className="bg-white rounded-[48px] border border-slate-100 shadow-sm overflow-hidden">
+                    {/* Table [复刻 image_efa7d4.jpg] */}
+                    <div className="amber-card overflow-hidden">
                         <div className="p-10 border-b border-slate-50 flex justify-between items-center bg-slate-50/20">
                             <h3 className="font-black text-slate-900 text-xl flex items-center gap-3">Portfolio Assets</h3>
-                            <div className="flex gap-4">
-                                <button className="bg-slate-900 text-white px-8 py-4 rounded-2xl text-xs font-black shadow-2xl shadow-slate-200 flex items-center gap-2 hover:bg-slate-800 transition-all"><Icon name="plus" size={14}/> Add Asset</button>
-                            </div>
+                            <button className="bg-slate-900 text-white px-8 py-4 rounded-2xl text-xs font-black shadow-2xl shadow-slate-200">Add Asset</button>
                         </div>
                         <table className="w-full text-left">
-                            <thead className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
+                            <thead className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                                 <tr>
                                     <th className="px-12 py-8">Asset Details</th>
                                     <th className="px-12 py-8 text-right">Market Value (USD)</th>
@@ -205,18 +178,18 @@
                             </thead>
                             <tbody className="divide-y divide-slate-50">
                                 {holdings.map(h => (
-                                    <tr key={h.id} className="hover:bg-slate-50/30 transition-colors">
+                                    <tr key={h.id} className="hover:bg-slate-50/30">
                                         <td className="px-12 py-10">
                                             <div className="flex items-center gap-5">
                                                 <div className="w-12 h-12 bg-slate-100 rounded-[18px] flex items-center justify-center font-black text-slate-400 text-lg">{h.symbol[0]}</div>
                                                 <div>
-                                                    <p className="font-black text-slate-900 text-xl">{h.symbol} <span className="text-[10px] bg-slate-100 px-2 py-1 rounded-lg text-slate-500 ml-2 uppercase font-black tracking-widest">{h.currency}</span></p>
-                                                    <p className="text-xs text-slate-400 font-bold mt-1 uppercase tracking-wider">{h.quantity.toLocaleString()} units available</p>
+                                                    <p className="font-black text-slate-900 text-xl">{h.symbol} <span className="text-[10px] bg-slate-100 px-2 py-1 rounded-lg text-slate-500 ml-2 uppercase font-black">{h.currency}</span></p>
+                                                    <p className="text-xs text-slate-400 font-bold mt-1 uppercase tracking-wider">{h.quantity.toLocaleString()} units</p>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="px-12 py-10 text-right font-black text-slate-800 text-2xl">
-                                            ${Math.floor(h.quantity / (h.currency === 'CNY' ? rates.CNY : 1)).toLocaleString()}
+                                        <td className="px-12 py-10 text-right">
+                                            <p className="font-black text-slate-800 text-2xl">${Math.floor(h.quantity / (h.currency === 'CNY' ? rates.CNY : 1)).toLocaleString()}</p>
                                         </td>
                                         <td className="px-12 py-10 text-right font-black text-indigo-600 text-lg">1.00</td>
                                     </tr>
@@ -228,7 +201,7 @@
             );
         }
 
-        // 使用 React 17 渲染启动
+        // React 16 的渲染方式，这种方式最稳，绝对不会报 forwardRef 错误
         ReactDOM.render(<App />, document.getElementById('root'));
     </script>
 </body>
