@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Amber Treasury | Final Stable</title>
+    <title>Amber Treasury | Pro Max Final</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react/16.14.0/umd/react.production.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/16.14.0/umd/react-dom.production.min.js"></script>
@@ -26,6 +26,7 @@
         const { useState, useEffect, useMemo } = React;
         const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } = window.Recharts;
 
+        // 图标零件
         const Icon = ({ name, size = 20 }) => {
             useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name]);
             return <i data-lucide={name} style={{ width: size, height: size }}></i>;
@@ -38,19 +39,11 @@
                 { id: '1', symbol: 'Cash', quantity: 15000, category: 'Cash', currency: 'USD' },
                 { id: '2', symbol: 'Cash', quantity: 50000, category: 'Cash', currency: 'CNY' }
             ]);
+            
+            // 财富演化模拟数据
             const history = [
                 { time: '09:00', val: 21800 }, { time: '12:00', val: 21944 }, { time: '18:00', val: 22100 }
             ];
-
-            useEffect(() => {
-                if (user) {
-                    localStorage.setItem('amber_user', JSON.stringify(user));
-                    fetch('https://amber-s-treasury-box.guo-amber798.workers.dev', { method: 'POST', body: JSON.stringify({}) })
-                        .then(res => res.json())
-                        .then(data => data.rates && setRates(data.rates))
-                        .catch(e => console.log("Sync delay"));
-                }
-            }, [user]);
 
             if (!user) {
                 return (
@@ -62,7 +55,7 @@
                             <h1 className="text-3xl font-black mb-10 tracking-tight">Amber Treasury</h1>
                             <button 
                                 onClick={() => setUser({name: 'Amber'})}
-                                className="w-full p-5 bg-indigo-600 text-white font-black rounded-2xl hover:bg-indigo-700 transition-all uppercase tracking-widest text-xs"
+                                className="w-full p-5 bg-indigo-600 text-white font-black rounded-2xl hover:bg-indigo-700 transition-all uppercase tracking-widest text-xs shadow-lg shadow-indigo-100"
                             >
                                 进入仪表盘
                             </button>
@@ -73,7 +66,7 @@
 
             return (
                 <div className="min-h-screen p-4 md:p-10 max-w-[1400px] mx-auto space-y-8 animate-in fade-in duration-700">
-                    {/* Header [复刻 image_efa7d4.jpg] */}
+                    {/* Navbar [复刻 image_efa7d4.jpg] */}
                     <div className="flex justify-between items-center">
                         <div className="flex items-center gap-3">
                             <div className="bg-indigo-600 p-2.5 rounded-2xl text-white shadow-xl shadow-indigo-100"><Icon name="sparkles" /></div>
@@ -89,17 +82,17 @@
                         <div className="amber-card p-8 relative overflow-hidden group">
                             <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Net Worth (USD)</p>
                             <h2 className="text-4xl font-black text-slate-900">$21,944</h2>
-                            <div className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-indigo-50 text-indigo-600 rounded-[24px]"><Icon name="dollar-sign" size={28}/></div>
+                            <div className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-indigo-50 text-indigo-600 rounded-[24px] group-hover:bg-indigo-600 group-hover:text-white transition-all"><Icon name="dollar-sign" size={28}/></div>
                         </div>
                         <div className="amber-card p-8 relative overflow-hidden group">
                             <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Net Worth (CNY)</p>
-                            <h2 className="text-4xl font-black text-slate-900">¥{(21944 * rates.CNY).toLocaleString(undefined, {maximumFractionDigits:0})}</h2>
-                            <div className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-blue-50 text-blue-600 rounded-[24px]"><Icon name="wallet" size={28}/></div>
+                            <h2 className="text-4xl font-black text-slate-900">¥158,000</h2>
+                            <div className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-blue-50 text-blue-600 rounded-[24px] group-hover:bg-blue-600 group-hover:text-white transition-all"><Icon name="wallet" size={28}/></div>
                         </div>
                         <div className="amber-card p-8 relative overflow-hidden group">
                             <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Primary Asset</p>
-                            <h2 className="text-4xl font-black text-indigo-600">Cash</h2>
-                            <div className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-indigo-50 text-indigo-600 rounded-[24px]"><Icon name="trending-up" size={28}/></div>
+                            <h2 className="text-4xl font-black text-indigo-600 tracking-tight leading-none">Cash</h2>
+                            <div className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-indigo-50 text-indigo-600 rounded-[24px] group-hover:bg-indigo-600 group-hover:text-white transition-all"><Icon name="trending-up" size={28}/></div>
                         </div>
                     </div>
 
@@ -109,7 +102,7 @@
                             <h3 className="font-black text-lg mb-10 flex items-center gap-3"><Icon name="history" className="text-indigo-600"/> Wealth Evolution</h3>
                             <div className="h-[320px] w-full">
                                 <ResponsiveContainer>
-                                    {/* 核心修复：isAnimationActive={false} 彻底停用出问题的动画零件 */}
+                                    {/* 核心修复：isAnimationActive={false} 彻底避开出问题的 Animate.js */}
                                     <LineChart data={history}>
                                         <CartesianGrid strokeDasharray="0" vertical={false} stroke="#f1f5f9" />
                                         <XAxis dataKey="time" hide />
@@ -139,24 +132,24 @@
                                 </ResponsiveContainer>
                                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
                                     <p className="text-4xl font-black text-slate-900 tracking-tighter leading-none">100%</p>
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">In Cash</p>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Cash Weight</p>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Asset Table [复刻 image_efa7d4.jpg] */}
+                    {/* Table [复刻 image_efa7d4.jpg] */}
                     <div className="amber-card overflow-hidden">
                         <div className="p-10 border-b border-slate-50 flex justify-between items-center bg-slate-50/20">
                             <h3 className="font-black text-slate-900 text-xl flex items-center gap-3">Portfolio Assets</h3>
-                            <button className="bg-slate-900 text-white px-8 py-4 rounded-2xl text-xs font-black shadow-2xl shadow-slate-200">Add Asset</button>
+                            <button className="bg-slate-900 text-white px-8 py-4 rounded-2xl text-xs font-black shadow-2xl shadow-slate-200 hover:scale-105 transition-all">Add Asset</button>
                         </div>
-                        <table className="w-full text-left">
+                        <table className="w-full text-left text-sm">
                             <thead className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                                 <tr>
                                     <th className="px-12 py-8">Asset Details</th>
                                     <th className="px-12 py-8 text-right">Market Value (USD)</th>
-                                    <th className="px-12 py-8 text-right">Price Action</th>
+                                    <th className="px-12 py-8 text-right font-black">Price Action</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-50">
@@ -164,15 +157,15 @@
                                     <tr key={h.id} className="hover:bg-slate-50/30 transition-colors">
                                         <td className="px-12 py-10">
                                             <div className="flex items-center gap-5">
-                                                <div className="w-12 h-12 bg-slate-100 rounded-[18px] flex items-center justify-center font-black text-slate-400 text-lg uppercase">{h.symbol[0]}</div>
+                                                <div className="w-12 h-12 bg-slate-100 rounded-[18px] flex items-center justify-center font-black text-slate-400 text-lg uppercase tracking-tighter">{h.symbol[0]}</div>
                                                 <div>
-                                                    <p className="font-black text-slate-900 text-xl tracking-tight">{h.symbol} <span className="text-[10px] bg-slate-100 px-2 py-1 rounded-lg text-slate-500 ml-2 uppercase font-black tracking-widest">{h.currency}</span></p>
+                                                    <p className="font-black text-slate-900 text-xl tracking-tight leading-none">{h.symbol} <span className="text-[10px] bg-slate-100 px-2 py-1 rounded-lg text-slate-500 ml-2 uppercase font-black tracking-widest">{h.currency}</span></p>
                                                     <p className="text-xs text-slate-400 font-bold mt-1 uppercase tracking-wider">{h.quantity.toLocaleString()} units available</p>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="px-12 py-10 text-right font-black text-slate-800 text-2xl">
-                                            ${Math.floor(h.quantity / (h.currency === 'CNY' ? rates.CNY : 1)).toLocaleString()}
+                                        <td className="px-12 py-10 text-right">
+                                            <p className="font-black text-slate-800 text-2xl tracking-tighter">${Math.floor(h.quantity / (h.currency === 'CNY' ? rates.CNY : 1)).toLocaleString()}</p>
                                         </td>
                                         <td className="px-12 py-10 text-right font-black text-indigo-600 text-lg tracking-tight">1.00</td>
                                     </tr>
@@ -184,7 +177,7 @@
             );
         }
 
-        // 启动渲染
+        // 使用 React 16 稳定版渲染
         ReactDOM.render(<App />, document.getElementById('root'));
     </script>
 </body>
