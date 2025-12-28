@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Amber Treasury | Pro Max Fixed</title>
+    <title>Amber Treasury | Pro Max Sync</title>
     <script src="https://cdn.staticfile.org/react/16.14.0/umd/react.production.min.js"></script>
     <script src="https://cdn.staticfile.org/react-dom/16.14.0/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.staticfile.org/lucide/0.263.0/lucide.min.js"></script>
@@ -13,74 +13,92 @@
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
         body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; color: #1e293b; }
         .amber-card { background: white; border-radius: 40px; border: 1px solid #f1f5f9; box-shadow: 0 4px 20px rgba(0,0,0,0.02); }
+        .modal-bg { background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(8px); }
+        .rotate-sync { animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
     <div id="root"></div>
     <script type="text/babel">
-        const useState = React.useState;
-        const useEffect = React.useEffect;
+        const { useState, useEffect } = React;
 
-        const Icon = ({ name, size = 20 }) => {
+        const Icon = ({ name, size = 20, className = "" }) => {
             useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name]);
-            return <i data-lucide={name} style={{ width: size, height: size }}></i>;
+            return <i data-lucide={name} className={className} style={{ width: size, height: size }}></i>;
         };
 
-        // --- 手绘财富曲线：复刻 Wealth Evolution ---
-        const MiniLineChart = () => (
-            <div className="w-full h-[250px] relative mt-4">
-                <svg viewBox="0 0 1000 250" className="w-full h-full overflow-visible">
-                    <defs>
-                        <linearGradient id="gradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#6366f1" stopOpacity="0.2" />
-                            <stop offset="100%" stopColor="#6366f1" stopOpacity="0" />
-                        </linearGradient>
-                    </defs>
-                    <path d="M0 180 L200 180 L400 140 L600 140 L800 100 L1000 100" fill="none" stroke="#6366f1" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M0 180 L200 180 L400 140 L600 140 L800 100 L1000 100 V250 H0 Z" fill="url(#gradient)" />
-                </svg>
-                <div className="absolute inset-0 flex flex-col justify-between text-[10px] font-bold text-slate-300 pointer-events-none uppercase">
-                    <div className="border-t border-slate-50 pt-1">22k</div>
-                    <div className="border-t border-slate-50 pt-1">17k</div>
-                    <div className="border-t border-slate-50 pt-1">11k</div>
-                    <div className="border-t border-slate-50 pt-1">6k</div>
-                </div>
-            </div>
-        );
-
-        // --- 手绘环形图：复刻 Allocation ---
-        const MiniPieChart = () => (
-            <div className="relative w-48 h-48 mx-auto">
-                <svg viewBox="0 0 36 36" className="w-full h-full transform -rotate-90">
-                    <circle cx="18" cy="18" r="15.9" fill="none" stroke="#f1f5f9" strokeWidth="3.8" />
-                    <circle cx="18" cy="18" r="15.9" fill="none" stroke="#6366f1" strokeWidth="3.8" strokeDasharray="100 100" />
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                    <p className="text-4xl font-black text-slate-900 tracking-tighter">100%</p>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Cash</p>
-                </div>
-            </div>
-        );
-
         function App() {
-            const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('amber_user_v3')));
+            const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('amber_user_v6')));
             const [rates, setRates] = useState({ CNY: 7.24 });
+            const [isSyncing, setIsSyncing] = useState(false); // 同步状态
+            const [holdings, setHoldings] = useState(() => {
+                const saved = localStorage.getItem('amber_holdings');
+                return saved ? JSON.parse(saved) : [
+                    { id: 1, symbol: 'Cash', quantity: 15000, currency: 'USD' },
+                    { id: 2, symbol: 'Cash', quantity: 50000, currency: 'CNY' }
+                ];
+            });
+            const [watchlist] = useState([
+                { symbol: 'XAU', name: 'Gold', price: '2,650.40', change: '+1.2%' },
+                { symbol: 'BTC', name: 'Bitcoin', price: '96,400.00', change: '-0.5%' }
+            ]);
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [newAsset, setNewAsset] = useState({ symbol: '', quantity: '', currency: 'USD' });
 
+            // --- 核心同步函数 ---
+            const syncData = () => {
+                setIsSyncing(true);
+                // 调用你的 Worker
+                fetch('https://amber-s-treasury-box.guo-amber798.workers.dev', { method: 'POST', body: JSON.stringify({}) })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.rates) {
+                            setRates(data.rates);
+                            console.log("Rates updated:", data.rates);
+                        }
+                        setTimeout(() => setIsSyncing(false), 800); // 增加一点点延迟让动画更自然
+                    })
+                    .catch(e => {
+                        console.log("Sync failed");
+                        setIsSyncing(false);
+                    });
+            };
+
+            // 初始加载执行一次
             useEffect(() => {
                 if (user) {
-                    localStorage.setItem('amber_user_v3', JSON.stringify(user));
-                    fetch('https://amber-s-treasury-box.guo-amber798.workers.dev', { method: 'POST', body: JSON.stringify({}) })
-                        .then(res => res.json()).then(data => data.rates && setRates(data.rates)).catch(e => {});
+                    syncData();
                 }
             }, [user]);
 
+            useEffect(() => {
+                if (user) {
+                    localStorage.setItem('amber_user_v6', JSON.stringify(user));
+                    localStorage.setItem('amber_holdings', JSON.stringify(holdings));
+                }
+            }, [user, holdings]);
+
+            const totalUSD = holdings.reduce((sum, h) => {
+                const val = h.currency === 'CNY' ? h.quantity / rates.CNY : h.quantity;
+                return sum + val;
+            }, 0);
+
+            const addAsset = () => {
+                if (newAsset.symbol && newAsset.quantity) {
+                    setHoldings([...holdings, { ...newAsset, id: Date.now(), quantity: parseFloat(newAsset.quantity) }]);
+                    setIsModalOpen(false);
+                    setNewAsset({ symbol: '', quantity: '', currency: 'USD' });
+                }
+            };
+
             if (!user) return (
-                <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 text-center">
+                <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
                     <div className="bg-white p-12 rounded-[48px] w-full max-w-sm shadow-2xl">
                         <div className="bg-indigo-600 w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-xl shadow-indigo-100">
                             <Icon name="sparkles" size={32} className="text-white" />
                         </div>
-                        <h1 className="text-3xl font-black mb-10 tracking-tight text-slate-900 uppercase">Amber Treasury</h1>
+                        <h1 className="text-3xl font-black mb-10 tracking-tight text-center uppercase">Amber Treasury</h1>
                         <button onClick={() => setUser({name: 'Amber'})} className="w-full p-5 bg-indigo-600 text-white font-black rounded-2xl hover:bg-indigo-700 transition-all uppercase tracking-widest text-xs">Access Box</button>
                     </div>
                 </div>
@@ -88,66 +106,127 @@
 
             return (
                 <div className="min-h-screen p-4 md:p-10 max-w-[1400px] mx-auto space-y-8 animate-in fade-in duration-700">
+                    {/* Header */}
                     <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-3 text-slate-900">
-                            <div className="bg-indigo-600 p-2.5 rounded-2xl text-white"><Icon name="sparkles" /></div>
+                        <div className="flex items-center gap-3">
+                            <div className="bg-indigo-600 p-2.5 rounded-2xl text-white shadow-lg"><Icon name="sparkles" /></div>
                             <h1 className="text-2xl font-black tracking-tight uppercase">Amber Treasury</h1>
                         </div>
-                        <div className="bg-green-50 text-green-600 px-4 py-2 rounded-full text-[10px] font-black border border-green-100 flex items-center gap-2">
-                            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> LIVE SYNC
-                        </div>
+                        
+                        {/* 你的 Sync 按钮 */}
+                        <button 
+                            onClick={syncData}
+                            disabled={isSyncing}
+                            className={`flex items-center gap-3 px-6 py-3 rounded-2xl font-black text-[10px] tracking-widest uppercase transition-all ${isSyncing ? 'bg-slate-100 text-slate-400' : 'bg-white text-indigo-600 shadow-sm border border-indigo-50 hover:border-indigo-200'}`}
+                        >
+                            <Icon name="refresh-cw" size={14} className={isSyncing ? "rotate-sync" : ""} />
+                            {isSyncing ? "Syncing..." : `Sync Now (1:${rates.CNY})`}
+                        </button>
                     </div>
 
+                    {/* Stats Cards */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="amber-card p-8 relative overflow-hidden">
-                            <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest tracking-tighter">Net Worth (USD)</p>
-                            <h2 className="text-4xl font-black text-slate-900">$21,944</h2>
+                            <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Net Worth (USD)</p>
+                            <h2 className="text-4xl font-black text-slate-900">${Math.floor(totalUSD).toLocaleString()}</h2>
                             <div className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-indigo-50 text-indigo-600 rounded-[24px]"><Icon name="dollar-sign" size={28}/></div>
                         </div>
                         <div className="amber-card p-8 relative overflow-hidden">
-                            <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest tracking-tighter">Net Worth (CNY)</p>
-                            <h2 className="text-4xl font-black text-slate-900">¥{(21944 * rates.CNY).toLocaleString(undefined, {maximumFractionDigits:0})}</h2>
+                            <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Net Worth (CNY)</p>
+                            <h2 className="text-4xl font-black text-slate-900">¥{Math.floor(totalUSD * rates.CNY).toLocaleString()}</h2>
                             <div className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-blue-50 text-blue-600 rounded-[24px]"><Icon name="wallet" size={28}/></div>
                         </div>
                         <div className="amber-card p-8 relative overflow-hidden">
-                            <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest tracking-tighter">Primary Asset</p>
-                            <h2 className="text-4xl font-black text-indigo-600">Cash</h2>
-                            <div className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-indigo-50 text-indigo-600 rounded-[24px]"><Icon name="trending-up" size={28}/></div>
+                            <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Primary Balance</p>
+                            <h2 className="text-4xl font-black text-indigo-600 leading-none tracking-tight">CASH</h2>
+                            <div className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-indigo-50 text-indigo-600 rounded-[24px]"><Icon name="layers" size={28}/></div>
                         </div>
                     </div>
 
+                    {/* Charts & Watchlist Row */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         <div className="lg:col-span-2 amber-card p-10">
                             <h3 className="font-black text-lg mb-6 flex items-center gap-3"><Icon name="history" className="text-indigo-600"/> Wealth Evolution</h3>
-                            <MiniLineChart />
+                            <div className="w-full h-[250px] mt-4 relative">
+                                <svg viewBox="0 0 1000 250" className="w-full h-full overflow-visible">
+                                    <path d="M0 180 L200 180 L400 140 L600 140 L800 100 L1000 80" fill="none" stroke="#6366f1" strokeWidth="8" strokeLinecap="round" />
+                                </svg>
+                            </div>
                         </div>
-                        <div className="lg:col-span-1 amber-card p-10 flex flex-col items-center justify-center">
-                            <h3 className="font-black text-lg mb-10 self-start flex items-center gap-3"><Icon name="pie-chart" className="text-indigo-600"/> Allocation</h3>
-                            <MiniPieChart />
+                        
+                        <div className="amber-card p-10">
+                            <h3 className="font-black text-lg mb-8 flex items-center gap-3"><Icon name="eye" className="text-indigo-600"/> Watchlist</h3>
+                            <div className="space-y-6">
+                                {watchlist.map(item => (
+                                    <div key={item.symbol} className="flex justify-between items-center p-4 bg-slate-50 rounded-3xl">
+                                        <div>
+                                            <p className="font-black text-slate-900">{item.symbol}</p>
+                                            <p className="text-[10px] text-slate-400 font-bold uppercase">{item.name}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="font-black text-slate-900">${item.price}</p>
+                                            <p className={`text-[10px] font-black ${item.change.startsWith('+') ? 'text-green-500' : 'text-red-500'}`}>{item.change}</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
 
+                    {/* Portfolio Table */}
                     <div className="amber-card overflow-hidden">
-                        <div className="p-10 border-b border-slate-50 flex justify-between items-center bg-slate-50/20 text-slate-900">
-                            <h3 className="font-black text-xl flex items-center gap-3 tracking-tighter">Portfolio Assets</h3>
-                            <button className="bg-slate-900 text-white px-8 py-4 rounded-2xl text-xs font-black shadow-2xl shadow-slate-200">Add Asset</button>
+                        <div className="p-10 border-b border-slate-50 flex justify-between items-center bg-slate-50/20">
+                            <h3 className="font-black text-slate-900 text-xl flex items-center gap-3 tracking-tighter">Portfolio Assets</h3>
+                            <button onClick={() => setIsModalOpen(true)} className="bg-slate-900 text-white px-8 py-4 rounded-2xl text-xs font-black shadow-2xl hover:scale-105 transition-all">Add Asset</button>
                         </div>
                         <table className="w-full text-left">
                             <thead className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                <tr><th className="px-12 py-8">Asset</th><th className="px-12 py-8 text-right">Value (USD)</th><th className="px-12 py-8 text-right">Price</th></tr>
+                                <tr><th className="px-12 py-8">Asset</th><th className="px-12 py-8 text-right">Value (USD)</th><th className="px-12 py-8 text-right">Quantity</th></tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-50 text-slate-900 font-bold">
-                                <tr>
-                                    <td className="px-12 py-10 flex items-center gap-5">
-                                        <div className="w-12 h-12 bg-slate-100 rounded-[18px] flex items-center justify-center font-black text-slate-400 text-lg uppercase">C</div>
-                                        <div><p className="text-xl">Cash <span className="text-[10px] bg-slate-100 px-2 py-1 rounded-lg text-slate-500 ml-1 uppercase">USD</span></p></div>
-                                    </td>
-                                    <td className="px-12 py-10 text-right text-2xl tracking-tighter">$15,000</td>
-                                    <td className="px-12 py-10 text-right text-indigo-600">1.00</td>
-                                </tr>
+                            <tbody className="divide-y divide-slate-50">
+                                {holdings.map(h => (
+                                    <tr key={h.id} className="hover:bg-slate-50/30 transition-colors">
+                                        <td className="px-12 py-10">
+                                            <div className="flex items-center gap-5">
+                                                <div className="w-12 h-12 bg-slate-100 rounded-[18px] flex items-center justify-center font-black text-slate-400 text-lg uppercase">{h.symbol[0]}</div>
+                                                <div>
+                                                    <p className="font-black text-slate-900 text-xl">{h.symbol} <span className="text-[10px] bg-slate-100 px-2 py-1 rounded-lg text-slate-500 ml-1 uppercase">{h.currency}</span></p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="px-12 py-10 text-right text-2xl font-black text-slate-800">
+                                            ${Math.floor(h.currency === 'CNY' ? h.quantity / rates.CNY : h.quantity).toLocaleString()}
+                                        </td>
+                                        <td className="px-12 py-10 text-right text-slate-400 font-bold">{h.quantity.toLocaleString()}</td>
+                                    </tr>
+                                ))}
                             </tbody>
                         </table>
                     </div>
+
+                    {/* Add Asset Modal */}
+                    {isModalOpen && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 modal-bg animate-in fade-in duration-200">
+                            <div className="bg-white p-10 rounded-[40px] w-full max-w-md shadow-2xl">
+                                <h3 className="text-2xl font-black mb-8 tracking-tighter">Add New Asset</h3>
+                                <div className="space-y-4">
+                                    <input placeholder="Asset Symbol (e.g. Gold)" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold" 
+                                        value={newAsset.symbol} onChange={e => setNewAsset({...newAsset, symbol: e.target.value})} />
+                                    <input type="number" placeholder="Quantity" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold" 
+                                        value={newAsset.quantity} onChange={e => setNewAsset({...newAsset, quantity: e.target.value})} />
+                                    <select className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold" 
+                                        value={newAsset.currency} onChange={e => setNewAsset({...newAsset, currency: e.target.value})}>
+                                        <option value="USD">USD</option>
+                                        <option value="CNY">CNY</option>
+                                    </select>
+                                    <div className="flex gap-4 mt-8">
+                                        <button onClick={() => setIsModalOpen(false)} className="flex-1 p-4 bg-slate-100 text-slate-500 font-black rounded-2xl uppercase tracking-widest text-[10px]">Cancel</button>
+                                        <button onClick={addAsset} className="flex-1 p-4 bg-indigo-600 text-white font-black rounded-2xl uppercase tracking-widest text-[10px]">Save Asset</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         }
