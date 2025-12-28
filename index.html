@@ -5,9 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Amber's Treasury Box | Pro</title>
     
-    <script src="https://lf6-cdn-tos.bytecdntp.com/cdn/expire-1-M/react/18.2.0/umd/react.production.min.js"></script>
-    <script src="https://lf6-cdn-tos.bytecdntp.com/cdn/expire-1-M/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.10.3/Recharts.js"></script>
+    <script src="https://lf6-cdn-tos.bytecdntp.com/cdn/expire-1-M/react/17.0.2/umd/react.production.min.js"></script>
+    <script src="https://lf6-cdn-tos.bytecdntp.com/cdn/expire-1-M/react-dom/17.0.2/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.1.16/Recharts.js"></script>
+    
     <script src="https://lf6-cdn-tos.bytecdntp.com/cdn/expire-1-M/lucide/0.263.0/lucide.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://lf6-cdn-tos.bytecdntp.com/cdn/expire-1-M/babel-standalone/7.17.6/babel.min.js"></script>
@@ -15,7 +16,6 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
         body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; }
-        .recharts-cartesian-grid-horizontal line { stroke: #f1f5f9; }
     </style>
 </head>
 <body>
@@ -24,23 +24,23 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        // 预防性检查：如果库还没加载完，先显示加载状态
         const SafeApp = () => {
-            const [loaded, setLoaded] = useState(false);
-            
+            const [ready, setReady] = useState(false);
             useEffect(() => {
-                const check = () => {
-                    if (window.Recharts && window.Recharts.LineChart) setLoaded(true);
-                    else setTimeout(check, 100);
-                };
-                check();
+                const interval = setInterval(() => {
+                    if (window.Recharts && window.lucide) {
+                        setReady(true);
+                        clearInterval(interval);
+                    }
+                }, 100);
+                return () => clearInterval(interval);
             }, []);
 
-            if (!loaded) return (
+            if (!ready) return (
                 <div className="min-h-screen flex items-center justify-center bg-slate-50">
                     <div className="text-center">
                         <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                        <p className="font-bold text-slate-400 uppercase tracking-widest text-xs">零件安全加载中...</p>
+                        <p className="font-bold text-slate-400 uppercase text-[10px] tracking-widest">系统零件校对中...</p>
                     </div>
                 </div>
             );
@@ -67,7 +67,7 @@
             useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, []);
 
             return (
-                <div className="min-h-screen p-4 md:p-10 max-w-[1400px] mx-auto space-y-8 animate-in fade-in duration-700">
+                <div className="min-h-screen p-4 md:p-10 max-w-[1400px] mx-auto space-y-8">
                     {/* Header [复刻 image_efa7d4.jpg] */}
                     <div className="flex justify-between items-center">
                         <div className="flex items-center gap-3">
@@ -107,10 +107,10 @@
                             <div className="h-[300px] w-full">
                                 <ResponsiveContainer>
                                     <LineChart data={history}>
-                                        <CartesianGrid strokeDasharray="0" vertical={false} />
+                                        <CartesianGrid strokeDasharray="0" vertical={false} stroke="#f1f5f9" />
                                         <XAxis dataKey="time" hide />
                                         <YAxis hide domain={['dataMin - 500', 'dataMax + 500']} />
-                                        <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'}} />
+                                        <Tooltip contentStyle={{borderRadius: '16px', border: 'none'}} />
                                         <Line type="monotone" dataKey="val" stroke="#6366f1" strokeWidth={6} dot={false} />
                                     </LineChart>
                                 </ResponsiveContainer>
@@ -128,7 +128,7 @@
                                 </ResponsiveContainer>
                                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                                     <p className="text-4xl font-black text-slate-900 tracking-tighter">100%</p>
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cash</p>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center leading-tight">Cash</p>
                                 </div>
                             </div>
                         </div>
@@ -137,8 +137,8 @@
             );
         };
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<SafeApp />);
+        // React 17 的渲染方式
+        ReactDOM.render(<SafeApp />, document.getElementById('root'));
     </script>
 </body>
 </html>
