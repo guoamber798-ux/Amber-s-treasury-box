@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Amber Treasury | Pro Max Sync</title>
+    <title>Amber Treasury | Portfolio Pro</title>
     <script src="https://cdn.staticfile.org/react/16.14.0/umd/react.production.min.js"></script>
     <script src="https://cdn.staticfile.org/react-dom/16.14.0/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.staticfile.org/lucide/0.263.0/lucide.min.js"></script>
@@ -21,207 +21,209 @@
 <body>
     <div id="root"></div>
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useMemo } = React;
 
         const Icon = ({ name, size = 20, className = "" }) => {
             useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name]);
             return <i data-lucide={name} className={className} style={{ width: size, height: size }}></i>;
         };
 
+        // --- 核心分类颜色配置 ---
+        const CATEGORIES = {
+            'Cash': { color: '#6366f1', label: '现金' },
+            'Crypto': { color: '#f59e0b', label: '加密货币' },
+            'Stock': { color: '#10b981', label: '股票' },
+            'Bond': { color: '#ef4444', label: '债权' }
+        };
+
+        // --- 原生 SVG 动态饼图组件 ---
+        const DynamicPieChart = ({ data }) => {
+            let cumulativePercent = 0;
+            function getCoordinatesForPercent(percent) {
+                const x = Math.cos(2 * Math.PI * percent);
+                const y = Math.sin(2 * Math.PI * percent);
+                return [x, y];
+            }
+
+            return (
+                <div className="relative w-56 h-56 mx-auto">
+                    <svg viewBox="-1 -1 2 2" className="transform -rotate-90 w-full h-full">
+                        {data.map((slice, i) => {
+                            if (slice.value <= 0) return null;
+                            const [startX, startY] = getCoordinatesForPercent(cumulativePercent);
+                            cumulativePercent += slice.value;
+                            const [endX, endY] = getCoordinatesForPercent(cumulativePercent);
+                            const largeArcFlag = slice.value > 0.5 ? 1 : 0;
+                            const pathData = [
+                                `M ${startX} ${startY}`,
+                                `A 1 1 0 ${largeArcFlag} 1 ${endX} ${endY}`,
+                                `L 0 0`,
+                            ].join(' ');
+                            return <path key={i} d={pathData} fill={slice.color} />;
+                        })}
+                        <circle cx="0" cy="0" r="0.7" fill="white" />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">资产分布</p>
+                        <p className="text-2xl font-black text-slate-900 tracking-tighter">Portfolio</p>
+                    </div>
+                </div>
+            );
+        };
+
         function App() {
-            const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('amber_user_v6')));
+            const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('amber_user_v7')));
             const [rates, setRates] = useState({ CNY: 7.24 });
-            const [isSyncing, setIsSyncing] = useState(false); // 同步状态
+            const [isSyncing, setIsSyncing] = useState(false);
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            
             const [holdings, setHoldings] = useState(() => {
-                const saved = localStorage.getItem('amber_holdings');
+                const saved = localStorage.getItem('amber_holdings_v7');
                 return saved ? JSON.parse(saved) : [
-                    { id: 1, symbol: 'Cash', quantity: 15000, currency: 'USD' },
-                    { id: 2, symbol: 'Cash', quantity: 50000, currency: 'CNY' }
+                    { id: 1, symbol: 'Cash', quantity: 15000, currency: 'USD', category: 'Cash' },
+                    { id: 2, symbol: 'Cash', quantity: 50000, currency: 'CNY', category: 'Cash' }
                 ];
             });
-            const [watchlist] = useState([
-                { symbol: 'XAU', name: 'Gold', price: '2,650.40', change: '+1.2%' },
-                { symbol: 'BTC', name: 'Bitcoin', price: '96,400.00', change: '-0.5%' }
-            ]);
-            const [isModalOpen, setIsModalOpen] = useState(false);
-            const [newAsset, setNewAsset] = useState({ symbol: '', quantity: '', currency: 'USD' });
 
-            // --- 核心同步函数 ---
-            const syncData = () => {
-                setIsSyncing(true);
-                // 调用你的 Worker
-                fetch('https://amber-s-treasury-box.guo-amber798.workers.dev', { method: 'POST', body: JSON.stringify({}) })
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.rates) {
-                            setRates(data.rates);
-                            console.log("Rates updated:", data.rates);
-                        }
-                        setTimeout(() => setIsSyncing(false), 800); // 增加一点点延迟让动画更自然
-                    })
-                    .catch(e => {
-                        console.log("Sync failed");
-                        setIsSyncing(false);
-                    });
-            };
+            const [newAsset, setNewAsset] = useState({ symbol: '', quantity: '', currency: 'USD', category: 'Cash' });
 
-            // 初始加载执行一次
+            // --- 数据持久化 ---
             useEffect(() => {
                 if (user) {
-                    syncData();
-                }
-            }, [user]);
-
-            useEffect(() => {
-                if (user) {
-                    localStorage.setItem('amber_user_v6', JSON.stringify(user));
-                    localStorage.setItem('amber_holdings', JSON.stringify(holdings));
+                    localStorage.setItem('amber_user_v7', JSON.stringify(user));
+                    localStorage.setItem('amber_holdings_v7', JSON.stringify(holdings));
                 }
             }, [user, holdings]);
 
-            const totalUSD = holdings.reduce((sum, h) => {
-                const val = h.currency === 'CNY' ? h.quantity / rates.CNY : h.quantity;
-                return sum + val;
-            }, 0);
-
-            const addAsset = () => {
-                if (newAsset.symbol && newAsset.quantity) {
-                    setHoldings([...holdings, { ...newAsset, id: Date.now(), quantity: parseFloat(newAsset.quantity) }]);
-                    setIsModalOpen(false);
-                    setNewAsset({ symbol: '', quantity: '', currency: 'USD' });
-                }
+            // --- 同步逻辑 ---
+            const syncData = () => {
+                setIsSyncing(true);
+                fetch('https://amber-s-treasury-box.guo-amber798.workers.dev', { method: 'POST', body: JSON.stringify({}) })
+                    .then(res => res.json()).then(data => {
+                        if (data.rates) setRates(data.rates);
+                        setTimeout(() => setIsSyncing(false), 800);
+                    }).catch(() => setIsSyncing(false));
             };
+
+            // --- 分类汇总计算 ---
+            const { categoryStats, totalUSD } = useMemo(() => {
+                let total = 0;
+                const stats = { Cash: 0, Crypto: 0, Stock: 0, Bond: 0 };
+                
+                holdings.forEach(h => {
+                    const val = h.currency === 'CNY' ? h.quantity / rates.CNY : h.quantity;
+                    stats[h.category] += val;
+                    total += val;
+                });
+
+                const pieData = Object.keys(CATEGORIES).map(cat => ({
+                    name: cat,
+                    value: total > 0 ? stats[cat] / total : 0,
+                    color: CATEGORIES[cat].color
+                }));
+
+                return { categoryStats: pieData, totalUSD: total };
+            }, [holdings, rates]);
 
             if (!user) return (
                 <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
                     <div className="bg-white p-12 rounded-[48px] w-full max-w-sm shadow-2xl">
-                        <div className="bg-indigo-600 w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-xl shadow-indigo-100">
-                            <Icon name="sparkles" size={32} className="text-white" />
-                        </div>
-                        <h1 className="text-3xl font-black mb-10 tracking-tight text-center uppercase">Amber Treasury</h1>
-                        <button onClick={() => setUser({name: 'Amber'})} className="w-full p-5 bg-indigo-600 text-white font-black rounded-2xl hover:bg-indigo-700 transition-all uppercase tracking-widest text-xs">Access Box</button>
+                        <div className="bg-indigo-600 w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-xl"><Icon name="sparkles" size={32} className="text-white" /></div>
+                        <h1 className="text-3xl font-black mb-10 tracking-tight text-center">AMBER BOX</h1>
+                        <button onClick={() => {setUser({name:'Amber'}); syncData();}} className="w-full p-5 bg-indigo-600 text-white font-black rounded-2xl uppercase tracking-widest text-xs">Enter Dashboard</button>
                     </div>
                 </div>
             );
 
             return (
-                <div className="min-h-screen p-4 md:p-10 max-w-[1400px] mx-auto space-y-8 animate-in fade-in duration-700">
-                    {/* Header */}
+                <div className="min-h-screen p-4 md:p-10 max-w-[1400px] mx-auto space-y-8">
+                    {/* Top Bar */}
                     <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-indigo-600 p-2.5 rounded-2xl text-white shadow-lg"><Icon name="sparkles" /></div>
-                            <h1 className="text-2xl font-black tracking-tight uppercase">Amber Treasury</h1>
-                        </div>
-                        
-                        {/* 你的 Sync 按钮 */}
-                        <button 
-                            onClick={syncData}
-                            disabled={isSyncing}
-                            className={`flex items-center gap-3 px-6 py-3 rounded-2xl font-black text-[10px] tracking-widest uppercase transition-all ${isSyncing ? 'bg-slate-100 text-slate-400' : 'bg-white text-indigo-600 shadow-sm border border-indigo-50 hover:border-indigo-200'}`}
-                        >
+                        <div className="flex items-center gap-3"><div className="bg-indigo-600 p-2.5 rounded-2xl text-white shadow-lg"><Icon name="sparkles" /></div><h1 className="text-2xl font-black tracking-tight uppercase">Amber Treasury</h1></div>
+                        <button onClick={syncData} disabled={isSyncing} className="flex items-center gap-3 px-6 py-3 bg-white rounded-2xl font-black text-[10px] tracking-widest uppercase border border-indigo-50 shadow-sm">
                             <Icon name="refresh-cw" size={14} className={isSyncing ? "rotate-sync" : ""} />
-                            {isSyncing ? "Syncing..." : `Sync Now (1:${rates.CNY})`}
+                            {isSyncing ? "Syncing..." : `Sync Now (CNY:${rates.CNY})`}
                         </button>
                     </div>
 
-                    {/* Stats Cards */}
+                    {/* Stats */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="amber-card p-8 relative overflow-hidden">
-                            <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Net Worth (USD)</p>
-                            <h2 className="text-4xl font-black text-slate-900">${Math.floor(totalUSD).toLocaleString()}</h2>
-                            <div className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-indigo-50 text-indigo-600 rounded-[24px]"><Icon name="dollar-sign" size={28}/></div>
-                        </div>
-                        <div className="amber-card p-8 relative overflow-hidden">
-                            <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Net Worth (CNY)</p>
-                            <h2 className="text-4xl font-black text-slate-900">¥{Math.floor(totalUSD * rates.CNY).toLocaleString()}</h2>
-                            <div className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-blue-50 text-blue-600 rounded-[24px]"><Icon name="wallet" size={28}/></div>
-                        </div>
-                        <div className="amber-card p-8 relative overflow-hidden">
-                            <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Primary Balance</p>
-                            <h2 className="text-4xl font-black text-indigo-600 leading-none tracking-tight">CASH</h2>
-                            <div className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-indigo-50 text-indigo-600 rounded-[24px]"><Icon name="layers" size={28}/></div>
-                        </div>
+                        <div className="amber-card p-8"><p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Net Worth (USD)</p><h2 className="text-4xl font-black text-slate-900">${Math.floor(totalUSD).toLocaleString()}</h2></div>
+                        <div className="amber-card p-8"><p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Net Worth (CNY)</p><h2 className="text-4xl font-black text-slate-900">¥{Math.floor(totalUSD * rates.CNY).toLocaleString()}</h2></div>
+                        <div className="amber-card p-8"><p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Portfolio Health</p><h2 className="text-4xl font-black text-green-500">Stable</h2></div>
                     </div>
 
-                    {/* Charts & Watchlist Row */}
+                    {/* Main Section: Chart & Legend */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        <div className="lg:col-span-2 amber-card p-10">
-                            <h3 className="font-black text-lg mb-6 flex items-center gap-3"><Icon name="history" className="text-indigo-600"/> Wealth Evolution</h3>
-                            <div className="w-full h-[250px] mt-4 relative">
-                                <svg viewBox="0 0 1000 250" className="w-full h-full overflow-visible">
-                                    <path d="M0 180 L200 180 L400 140 L600 140 L800 100 L1000 80" fill="none" stroke="#6366f1" strokeWidth="8" strokeLinecap="round" />
-                                </svg>
+                        <div className="lg:col-span-2 amber-card p-10 flex flex-col md:flex-row items-center gap-12">
+                            <div className="flex-shrink-0">
+                                <DynamicPieChart data={categoryStats} />
                             </div>
-                        </div>
-                        
-                        <div className="amber-card p-10">
-                            <h3 className="font-black text-lg mb-8 flex items-center gap-3"><Icon name="eye" className="text-indigo-600"/> Watchlist</h3>
-                            <div className="space-y-6">
-                                {watchlist.map(item => (
-                                    <div key={item.symbol} className="flex justify-between items-center p-4 bg-slate-50 rounded-3xl">
-                                        <div>
-                                            <p className="font-black text-slate-900">{item.symbol}</p>
-                                            <p className="text-[10px] text-slate-400 font-bold uppercase">{item.name}</p>
+                            <div className="flex-1 grid grid-cols-2 gap-4 w-full">
+                                {categoryStats.map(stat => (
+                                    <div key={stat.name} className="p-4 rounded-3xl border border-slate-50 bg-slate-50/30">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <div className="w-2 h-2 rounded-full" style={{backgroundColor: stat.color}}></div>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase">{CATEGORIES[stat.name].label}</p>
                                         </div>
-                                        <div className="text-right">
-                                            <p className="font-black text-slate-900">${item.price}</p>
-                                            <p className={`text-[10px] font-black ${item.change.startsWith('+') ? 'text-green-500' : 'text-red-500'}`}>{item.change}</p>
-                                        </div>
+                                        <p className="text-xl font-black text-slate-900">{Math.round(stat.value * 100)}%</p>
                                     </div>
                                 ))}
                             </div>
                         </div>
+
+                        {/* Watchlist Placeholder */}
+                        <div className="amber-card p-10">
+                            <h3 className="font-black text-lg mb-6 flex items-center gap-3"><Icon name="eye" className="text-indigo-600"/> Watchlist</h3>
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl"><p className="font-black">XAU/USD</p><p className="font-black text-green-500">$2,650</p></div>
+                                <div className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl"><p className="font-black">BTC/USD</p><p className="font-black text-red-500">$96,400</p></div>
+                            </div>
+                        </div>
                     </div>
 
-                    {/* Portfolio Table */}
+                    {/* Asset Table */}
                     <div className="amber-card overflow-hidden">
                         <div className="p-10 border-b border-slate-50 flex justify-between items-center bg-slate-50/20">
-                            <h3 className="font-black text-slate-900 text-xl flex items-center gap-3 tracking-tighter">Portfolio Assets</h3>
-                            <button onClick={() => setIsModalOpen(true)} className="bg-slate-900 text-white px-8 py-4 rounded-2xl text-xs font-black shadow-2xl hover:scale-105 transition-all">Add Asset</button>
+                            <h3 className="font-black text-xl tracking-tighter">Portfolio Assets</h3>
+                            <button onClick={() => setIsModalOpen(true)} className="bg-slate-900 text-white px-8 py-4 rounded-2xl text-xs font-black shadow-xl">Add Asset</button>
                         </div>
                         <table className="w-full text-left">
-                            <thead className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                <tr><th className="px-12 py-8">Asset</th><th className="px-12 py-8 text-right">Value (USD)</th><th className="px-12 py-8 text-right">Quantity</th></tr>
-                            </thead>
+                            <thead className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest"><tr className="border-b border-slate-50"><th className="px-12 py-6">Asset & Category</th><th className="px-12 py-6 text-right">Market Value (USD)</th><th className="px-12 py-6 text-right">Holdings</th></tr></thead>
                             <tbody className="divide-y divide-slate-50">
                                 {holdings.map(h => (
                                     <tr key={h.id} className="hover:bg-slate-50/30 transition-colors">
-                                        <td className="px-12 py-10">
-                                            <div className="flex items-center gap-5">
-                                                <div className="w-12 h-12 bg-slate-100 rounded-[18px] flex items-center justify-center font-black text-slate-400 text-lg uppercase">{h.symbol[0]}</div>
-                                                <div>
-                                                    <p className="font-black text-slate-900 text-xl">{h.symbol} <span className="text-[10px] bg-slate-100 px-2 py-1 rounded-lg text-slate-500 ml-1 uppercase">{h.currency}</span></p>
-                                                </div>
+                                        <td className="px-12 py-8">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-10 h-10 rounded-xl flex items-center justify-center font-black text-white text-xs" style={{backgroundColor: CATEGORIES[h.category].color}}>{h.symbol[0]}</div>
+                                                <div><p className="font-black text-slate-900">{h.symbol}</p><p className="text-[10px] font-bold text-slate-400 uppercase">{CATEGORIES[h.category].label}</p></div>
                                             </div>
                                         </td>
-                                        <td className="px-12 py-10 text-right text-2xl font-black text-slate-800">
-                                            ${Math.floor(h.currency === 'CNY' ? h.quantity / rates.CNY : h.quantity).toLocaleString()}
-                                        </td>
-                                        <td className="px-12 py-10 text-right text-slate-400 font-bold">{h.quantity.toLocaleString()}</td>
+                                        <td className="px-12 py-8 text-right text-xl font-black">${Math.floor(h.currency === 'CNY' ? h.quantity / rates.CNY : h.quantity).toLocaleString()}</td>
+                                        <td className="px-12 py-8 text-right text-slate-400 font-bold text-sm">{h.quantity.toLocaleString()} {h.currency}</td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
                     </div>
 
-                    {/* Add Asset Modal */}
+                    {/* Modal */}
                     {isModalOpen && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 modal-bg animate-in fade-in duration-200">
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 modal-bg">
                             <div className="bg-white p-10 rounded-[40px] w-full max-w-md shadow-2xl">
-                                <h3 className="text-2xl font-black mb-8 tracking-tighter">Add New Asset</h3>
+                                <h3 className="text-2xl font-black mb-8 tracking-tighter text-slate-900">Add New Asset</h3>
                                 <div className="space-y-4">
-                                    <input placeholder="Asset Symbol (e.g. Gold)" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold" 
-                                        value={newAsset.symbol} onChange={e => setNewAsset({...newAsset, symbol: e.target.value})} />
-                                    <input type="number" placeholder="Quantity" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold" 
-                                        value={newAsset.quantity} onChange={e => setNewAsset({...newAsset, quantity: e.target.value})} />
-                                    <select className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold" 
-                                        value={newAsset.currency} onChange={e => setNewAsset({...newAsset, currency: e.target.value})}>
-                                        <option value="USD">USD</option>
-                                        <option value="CNY">CNY</option>
-                                    </select>
+                                    <div className="space-y-1"><p className="text-[10px] font-black text-slate-400 uppercase ml-2">Symbol</p><input placeholder="e.g. BTC / Gold" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold" value={newAsset.symbol} onChange={e => setNewAsset({...newAsset, symbol: e.target.value})} /></div>
+                                    <div className="space-y-1"><p className="text-[10px] font-black text-slate-400 uppercase ml-2">Quantity</p><input type="number" placeholder="0.00" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold" value={newAsset.quantity} onChange={e => setNewAsset({...newAsset, quantity: e.target.value})} /></div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-1"><p className="text-[10px] font-black text-slate-400 uppercase ml-2">Currency</p><select className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold" value={newAsset.currency} onChange={e => setNewAsset({...newAsset, currency: e.target.value})}><option value="USD">USD</option><option value="CNY">CNY</option></select></div>
+                                        <div className="space-y-1"><p className="text-[10px] font-black text-slate-400 uppercase ml-2">Category</p><select className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold" value={newAsset.category} onChange={e => setNewAsset({...newAsset, category: e.target.value})}>
+                                            <option value="Cash">Cash (现金)</option><option value="Crypto">Crypto (加密)</option><option value="Stock">Stock (股票)</option><option value="Bond">Bond (债权)</option>
+                                        </select></div>
+                                    </div>
                                     <div className="flex gap-4 mt-8">
                                         <button onClick={() => setIsModalOpen(false)} className="flex-1 p-4 bg-slate-100 text-slate-500 font-black rounded-2xl uppercase tracking-widest text-[10px]">Cancel</button>
-                                        <button onClick={addAsset} className="flex-1 p-4 bg-indigo-600 text-white font-black rounded-2xl uppercase tracking-widest text-[10px]">Save Asset</button>
+                                        <button onClick={() => { if(newAsset.symbol && newAsset.quantity) { setHoldings([...holdings, {...newAsset, id: Date.now(), quantity: parseFloat(newAsset.quantity)}]); setIsModalOpen(false); setNewAsset({symbol:'', quantity:'', currency:'USD', category:'Cash'}); } }} className="flex-1 p-4 bg-indigo-600 text-white font-black rounded-2xl uppercase tracking-widest text-[10px]">Save Asset</button>
                                     </div>
                                 </div>
                             </div>
