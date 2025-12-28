@@ -1,17 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Amber Treasury | Pro Max Final</title>
     
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/16.14.0/umd/react.production.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/16.14.0/umd/react-dom.production.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.1.16/Recharts.js"></script>
-    
-    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <script src="https://cdn.staticfile.org/react/16.14.0/umd/react.production.min.js"></script>
+    <script src="https://cdn.staticfile.org/react-dom/16.14.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdn.staticfile.org/recharts/2.1.16/Recharts.js"></script>
+    <script src="https://cdn.staticfile.org/lucide/0.263.0/lucide.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/6.26.0/babel.min.js"></script>
+    <script src="https://cdn.staticfile.org/babel-standalone/6.26.0/babel.min.js"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
@@ -23,7 +22,11 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+        // 关键点：React 16 下的解构语法必须极简
+        const useState = React.useState;
+        const useEffect = React.useEffect;
+        const useMemo = React.useMemo;
+        
         const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } = window.Recharts;
 
         // 图标零件
@@ -33,31 +36,43 @@
         };
 
         function App() {
-            const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('amber_user')));
+            const [user, setUser] = useState(function() {
+                var saved = localStorage.getItem('amber_user');
+                return saved ? JSON.parse(saved) : null;
+            });
             const [rates, setRates] = useState({ CNY: 7.24 });
             const [holdings] = useState([
                 { id: '1', symbol: 'Cash', quantity: 15000, category: 'Cash', currency: 'USD' },
                 { id: '2', symbol: 'Cash', quantity: 50000, category: 'Cash', currency: 'CNY' }
             ]);
             
-            // 财富演化模拟数据
-            const history = [
+            var history = [
                 { time: '09:00', val: 21800 }, { time: '12:00', val: 21944 }, { time: '18:00', val: 22100 }
             ];
+
+            useEffect(function() {
+                if (user) {
+                    localStorage.setItem('amber_user', JSON.stringify(user));
+                    fetch('https://amber-s-treasury-box.guo-amber798.workers.dev', { method: 'POST', body: JSON.stringify({}) })
+                        .then(function(res) { return res.json(); })
+                        .then(function(data) { if (data.rates) setRates(data.rates); })
+                        .catch(function(e) { console.log("Offline"); });
+                }
+            }, [user]);
 
             if (!user) {
                 return (
                     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 text-center">
                         <div className="bg-white p-12 rounded-[48px] w-full max-w-md shadow-2xl">
                             <div className="bg-indigo-600 w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-xl">
-                                <Icon name="sparkles" size={32} className="text-white" />
+                                <Icon name="sparkles" size={32} />
                             </div>
-                            <h1 className="text-3xl font-black mb-10 tracking-tight">Amber Treasury</h1>
+                            <h1 className="text-3xl font-black mb-10 tracking-tight text-slate-900">Amber Treasury</h1>
                             <button 
-                                onClick={() => setUser({name: 'Amber'})}
-                                className="w-full p-5 bg-indigo-600 text-white font-black rounded-2xl hover:bg-indigo-700 transition-all uppercase tracking-widest text-xs shadow-lg shadow-indigo-100"
+                                onClick={function() { setUser({name: 'Amber'}); }}
+                                className="w-full p-5 bg-indigo-600 text-white font-black rounded-2xl hover:bg-indigo-700 transition-all uppercase tracking-widest text-xs"
                             >
-                                进入仪表盘
+                                进入资产仪表盘
                             </button>
                         </div>
                     </div>
@@ -65,12 +80,12 @@
             }
 
             return (
-                <div className="min-h-screen p-4 md:p-10 max-w-[1400px] mx-auto space-y-8 animate-in fade-in duration-700">
-                    {/* Navbar [复刻 image_efa7d4.jpg] */}
+                <div className="min-h-screen p-4 md:p-10 max-w-[1400px] mx-auto space-y-8">
+                    {/* Header [复刻 image_efa7d4.jpg] */}
                     <div className="flex justify-between items-center">
                         <div className="flex items-center gap-3">
                             <div className="bg-indigo-600 p-2.5 rounded-2xl text-white shadow-xl shadow-indigo-100"><Icon name="sparkles" /></div>
-                            <h1 className="text-2xl font-black tracking-tight uppercase">Amber Treasury</h1>
+                            <h1 className="text-2xl font-black tracking-tight uppercase text-slate-900">Amber Treasury</h1>
                         </div>
                         <div className="bg-green-50 text-green-600 px-4 py-2 rounded-full text-[10px] font-black border border-green-100 flex items-center gap-2">
                             <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> LIVE SYNCING
@@ -82,17 +97,17 @@
                         <div className="amber-card p-8 relative overflow-hidden group">
                             <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Net Worth (USD)</p>
                             <h2 className="text-4xl font-black text-slate-900">$21,944</h2>
-                            <div className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-indigo-50 text-indigo-600 rounded-[24px] group-hover:bg-indigo-600 group-hover:text-white transition-all"><Icon name="dollar-sign" size={28}/></div>
+                            <div className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-indigo-50 text-indigo-600 rounded-[24px]"><Icon name="dollar-sign" size={28}/></div>
                         </div>
                         <div className="amber-card p-8 relative overflow-hidden group">
                             <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Net Worth (CNY)</p>
                             <h2 className="text-4xl font-black text-slate-900">¥158,000</h2>
-                            <div className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-blue-50 text-blue-600 rounded-[24px] group-hover:bg-blue-600 group-hover:text-white transition-all"><Icon name="wallet" size={28}/></div>
+                            <div className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-blue-50 text-blue-600 rounded-[24px]"><Icon name="wallet" size={28}/></div>
                         </div>
                         <div className="amber-card p-8 relative overflow-hidden group">
                             <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Primary Asset</p>
                             <h2 className="text-4xl font-black text-indigo-600 tracking-tight leading-none">Cash</h2>
-                            <div className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-indigo-50 text-indigo-600 rounded-[24px] group-hover:bg-indigo-600 group-hover:text-white transition-all"><Icon name="trending-up" size={28}/></div>
+                            <div className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-indigo-50 text-indigo-600 rounded-[24px]"><Icon name="trending-up" size={28}/></div>
                         </div>
                     </div>
 
@@ -102,19 +117,18 @@
                             <h3 className="font-black text-lg mb-10 flex items-center gap-3"><Icon name="history" className="text-indigo-600"/> Wealth Evolution</h3>
                             <div className="h-[320px] w-full">
                                 <ResponsiveContainer>
-                                    {/* 核心修复：isAnimationActive={false} 彻底避开出问题的 Animate.js */}
                                     <LineChart data={history}>
                                         <CartesianGrid strokeDasharray="0" vertical={false} stroke="#f1f5f9" />
                                         <XAxis dataKey="time" hide />
                                         <YAxis hide domain={['dataMin - 100', 'dataMax + 100']} />
-                                        <Tooltip contentStyle={{borderRadius:'20px', border:'none', boxShadow:'0 10px 25px rgba(0,0,0,0.05)'}} />
+                                        <Tooltip contentStyle={{borderRadius:'20px', border:'none'}} />
                                         <Line type="monotone" dataKey="val" stroke="#6366f1" strokeWidth={6} dot={false} isAnimationActive={false} />
                                     </LineChart>
                                 </ResponsiveContainer>
                             </div>
                         </div>
                         <div className="amber-card p-10 flex flex-col items-center justify-center relative">
-                            <h3 className="font-black text-lg mb-10 self-start flex items-center gap-3"><Icon name="pie-chart" className="text-indigo-600"/> Allocation</h3>
+                            <h3 className="font-black text-lg mb-10 self-start flex items-center gap-3 text-slate-800"><Icon name="pie-chart" className="text-indigo-600"/> Allocation</h3>
                             <div className="h-[280px] w-full relative">
                                 <ResponsiveContainer>
                                     <PieChart>
@@ -132,7 +146,7 @@
                                 </ResponsiveContainer>
                                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
                                     <p className="text-4xl font-black text-slate-900 tracking-tighter leading-none">100%</p>
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Cash Weight</p>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">In Cash</p>
                                 </div>
                             </div>
                         </div>
@@ -140,11 +154,11 @@
 
                     {/* Table [复刻 image_efa7d4.jpg] */}
                     <div className="amber-card overflow-hidden">
-                        <div className="p-10 border-b border-slate-50 flex justify-between items-center bg-slate-50/20">
-                            <h3 className="font-black text-slate-900 text-xl flex items-center gap-3">Portfolio Assets</h3>
-                            <button className="bg-slate-900 text-white px-8 py-4 rounded-2xl text-xs font-black shadow-2xl shadow-slate-200 hover:scale-105 transition-all">Add Asset</button>
+                        <div className="p-10 border-b border-slate-50 flex justify-between items-center bg-slate-50/20 text-slate-900">
+                            <h3 className="font-black text-xl flex items-center gap-3">Portfolio Assets</h3>
+                            <button className="bg-slate-900 text-white px-8 py-4 rounded-2xl text-xs font-black shadow-2xl shadow-slate-200">Add Asset</button>
                         </div>
-                        <table className="w-full text-left text-sm">
+                        <table className="w-full text-left">
                             <thead className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                                 <tr>
                                     <th className="px-12 py-8">Asset Details</th>
@@ -152,14 +166,14 @@
                                     <th className="px-12 py-8 text-right font-black">Price Action</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-50">
-                                {holdings.map(h => (
+                            <tbody className="divide-y divide-slate-50 text-slate-900">
+                                {holdings.map(function(h) { return (
                                     <tr key={h.id} className="hover:bg-slate-50/30 transition-colors">
                                         <td className="px-12 py-10">
                                             <div className="flex items-center gap-5">
-                                                <div className="w-12 h-12 bg-slate-100 rounded-[18px] flex items-center justify-center font-black text-slate-400 text-lg uppercase tracking-tighter">{h.symbol[0]}</div>
+                                                <div className="w-12 h-12 bg-slate-100 rounded-[18px] flex items-center justify-center font-black text-slate-400 text-lg uppercase">{h.symbol[0]}</div>
                                                 <div>
-                                                    <p className="font-black text-slate-900 text-xl tracking-tight leading-none">{h.symbol} <span className="text-[10px] bg-slate-100 px-2 py-1 rounded-lg text-slate-500 ml-2 uppercase font-black tracking-widest">{h.currency}</span></p>
+                                                    <p className="font-black text-xl tracking-tight leading-none text-slate-900">{h.symbol} <span className="text-[10px] bg-slate-100 px-2 py-1 rounded-lg text-slate-500 ml-2 uppercase font-black tracking-widest">{h.currency}</span></p>
                                                     <p className="text-xs text-slate-400 font-bold mt-1 uppercase tracking-wider">{h.quantity.toLocaleString()} units available</p>
                                                 </div>
                                             </div>
@@ -169,7 +183,7 @@
                                         </td>
                                         <td className="px-12 py-10 text-right font-black text-indigo-600 text-lg tracking-tight">1.00</td>
                                     </tr>
-                                ))}
+                                );})}
                             </tbody>
                         </table>
                     </div>
@@ -177,8 +191,8 @@
             );
         }
 
-        // 使用 React 16 稳定版渲染
-        ReactDOM.render(<App />, document.getElementById('root'));
+        // 终极兼容性渲染启动
+        ReactDOM.render(React.createElement(App), document.getElementById('root'));
     </script>
 </body>
 </html>
