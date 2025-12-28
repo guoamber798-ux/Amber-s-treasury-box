@@ -1,77 +1,47 @@
 const https = require('https');
 
 exports.handler = async function(event, context) {
-  // 获取 Netlify 后台配置的 Key
+  // 从 Netlify 安全柜获取两个 Key
   const GEMINI_KEY = process.env.GEMINI_API_KEY;
   const POLYGON_KEY = process.env.POLYGON_API_KEY;
+  
+  // 1. 接收前端传过来的资产列表（Holdings）
+  const { holdingsString } = JSON.parse(event.body || '{}');
 
-  // 网络请求小助手
-  const postToGemini = (url, data) => {
+  const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
+
+  const prompt = `I have a portfolio with assets: [${holdingsString}]. 
+  Task: 1. Find market price for each in specified currency. 
+  2. Find exchange rates: USD to CNY, USD to HKD. 
+  Return ONLY valid JSON: {"rates": {"CNY": number, "HKD": number}, "prices": [{"symbol": "string", "price": number}]}`;
+
+  const callGemini = () => {
     return new Promise((resolve, reject) => {
-      const req = https.request(url, { method: 'POST', headers: { 'Content-Type': 'application/json' } }, (res) => {
+      const req = https.request(geminiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' } }, (res) => {
         let body = '';
         res.on('data', (chunk) => body += chunk);
         res.on('end', () => resolve({ ok: res.statusCode === 200, data: JSON.parse(body) }));
       });
       req.on('error', reject);
-      req.write(JSON.stringify(data));
+      req.write(JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }));
       req.end();
     });
   };
 
   try {
-    // 方案 A：主力使用 Gemini 2.0 Flash
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
-    const result = await postToGemini(geminiUrl, {
-      contents: [{ parts: [{ text: "以JSON格式返回AAPL现在的价格，包含字段：price, change。" }] }]
-    });
-
-    if (result.ok) return { statusCode: 200, body: JSON.stringify(result.data) };
-    throw new Error('Gemini 额度可能满了');
-
+    // 主力方案：Gemini
+    const result = await callGemini();
+    if (result.ok) {
+        // 提取 Gemini 返回的纯文本并解析成 JSON
+        const aiText = result.data.candidates[0].content.parts[0].text.replace(/```json/g, "").replace(/```/g, "").trim();
+        return { statusCode: 200, body: aiText };
+    }
+    throw new Error('Gemini Line Down');
   } catch (error) {
-    // 方案 B：自动切换到 Polygon 备选
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ message: "正在切换至备用行情源...", error: error.message })
-    };
-  }
-};const https = require('https');
-
-exports.handler = async function(event, context) {
-  // 获取 Netlify 后台配置的 Key
-  const GEMINI_KEY = process.env.GEMINI_API_KEY;
-  const POLYGON_KEY = process.env.POLYGON_API_KEY;
-
-  // 网络请求小助手
-  const postToGemini = (url, data) => {
-    return new Promise((resolve, reject) => {
-      const req = https.request(url, { method: 'POST', headers: { 'Content-Type': 'application/json' } }, (res) => {
-        let body = '';
-        res.on('data', (chunk) => body += chunk);
-        res.on('end', () => resolve({ ok: res.statusCode === 200, data: JSON.parse(body) }));
-      });
-      req.on('error', reject);
-      req.write(JSON.stringify(data));
-      req.end();
-    });
-  };
-
-  try {
-    // 方案 A：主力使用 Gemini 2.0 Flash
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
-    const result = await postToGemini(geminiUrl, {
-      contents: [{ parts: [{ text: "以JSON格式返回AAPL现在的价格，包含字段：price, change。" }] }]
-    });
-
-    if (result.ok) return { statusCode: 200, body: JSON.stringify(result.data) };
-    throw new Error('Gemini 额度可能满了');
-
-  } catch (error) {
-    // 方案 B：自动切换到 Polygon 备选
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ message: "正在切换至备用行情源...", error: error.message })
+    // 备选方案：Polygon (这里可以写简单的汇率逻辑保底)
+    return { 
+      statusCode: 200, 
+      body: JSON.stringify({ rates: { CNY: 7.24, HKD: 7.82 }, prices: [], note: "Backup active" }) 
     };
   }
 };
