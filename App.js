@@ -122,4 +122,4 @@ function App() {
 }
 
 // 导出组件
-export default App;
+ReactDOM.render(<App />, document.getElementById('root'));
