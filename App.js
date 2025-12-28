@@ -30,19 +30,47 @@ function App() {
 
   useEffect(() => { refresh(); }, []);
 
-  return (
-    <div className="min-h-screen bg-slate-50 p-8">
-      <div className="max-w-4xl mx-auto space-y-6">
-        <h1 className="text-2xl font-black text-slate-900">AMBER TREASURY</h1>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <DashboardCard title="Total (USD)" value="$65,000" icon="💰" />
-          <DashboardCard title="USD/CNY Rate" value={rates.CNY} icon="📈" />
+  // 在 App 函数内部的 return 处替换：
+return (
+  <div className="min-h-screen bg-slate-50 p-8">
+    <div className="max-w-4xl mx-auto space-y-8">
+      {/* 顶部标题与刷新按钮 */}
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-black text-slate-900 tracking-tight">AMBER TREASURY</h1>
+        <button 
+          onClick={refresh}
+          className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200"
+        >
+          {isRefreshing ? "Syncing..." : "Refresh Data"}
+        </button>
+      </div>
+
+      {/* 核心卡片 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <DashboardCard title="Total (USD)" value={`$${totalValueUSD.toLocaleString()}`} icon="💰" />
+        <DashboardCard title="USD/CNY Rate" value={rates.CNY} icon="📈" />
+      </div>
+
+      {/* 资产列表部分：把你的资产展示出来 */}
+      <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+        <div className="p-6 border-b border-slate-50">
+          <h2 className="text-lg font-bold text-slate-800">My Assets</h2>
+        </div>
+        <div className="divide-y divide-slate-50">
+          {holdings.map(h => (
+            <div key={h.id} className="p-6 flex justify-between items-center hover:bg-slate-50 transition-colors">
+              <div>
+                <p className="font-bold text-slate-900">{h.symbol}</p>
+                <p className="text-xs text-slate-400 uppercase font-semibold">{h.category || 'Currency'}</p>
+              </div>
+              <div className="text-right">
+                <p className="font-mono font-bold text-slate-700">{h.quantity.toLocaleString()} {h.currency}</p>
+                <p className="text-xs text-green-500 font-bold">Live</p>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
-  );
-}
-
-// 使用 React 18 的新渲染方式，且不使用 export
-const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(<App />);
+  </div>
+);
